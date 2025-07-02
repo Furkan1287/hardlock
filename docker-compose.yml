@@ -1,0 +1,381 @@
+version: '3.8'
+
+services:
+  # Database - SQLite (Development)
+  # postgres:
+  #   image: postgres:15-alpine
+  #   container_name: hardlock-postgres
+  #   environment:
+  #     POSTGRES_DB: hardlock
+  #     POSTGRES_USER: hardlock_user
+  #     POSTGRES_PASSWORD: hardlock_password
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres_data:/var/lib/postgresql/data
+  #     - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+  #   networks:
+  #     - hardlock-network
+
+  # Redis for caching and session management
+  redis:
+    image: redis:7-alpine
+    container_name: hardlock-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - hardlock-network
+
+  # Hashicorp Vault for key management
+  vault:
+    image: vault:1.15
+    container_name: hardlock-vault
+    ports:
+      - "8200:8200"
+    environment:
+      VAULT_DEV_ROOT_TOKEN_ID: hardlock-vault-token
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
+    cap_add:
+      - IPC_LOCK
+    networks:
+      - hardlock-network
+
+  # Prometheus for metrics
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: hardlock-prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    networks:
+      - hardlock-network
+
+  # Grafana for dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: hardlock-grafana
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: hardlock_admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources
+    networks:
+      - hardlock-network
+
+  # Jaeger for distributed tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: hardlock-jaeger
+    ports:
+      - "16686:16686"
+      - "14268:14268"
+    environment:
+      COLLECTOR_OTLP_ENABLED: true
+    networks:
+      - hardlock-network
+
+  # Elasticsearch for log aggregation
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: hardlock-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - hardlock-network
+
+  # Kibana for log visualization
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.0
+    container_name: hardlock-kibana
+    ports:
+      - "5601:5601"
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    depends_on:
+      - elasticsearch
+    networks:
+      - hardlock-network
+
+  # Identity Service
+  identity-service:
+    build:
+      context: .
+      dockerfile: src/HardLock.Identity/Dockerfile
+    container_name: hardlock-identity
+    ports:
+      - "5001:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Data Source=hardlock.db
+      - Redis__ConnectionString=redis:6379
+      - JWT__Secret=your-super-secret-jwt-key-here
+      - JWT__ExpiryMinutes=15
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - redis
+    networks:
+      - hardlock-network
+
+  # Encryption Service
+  encryption-service:
+    build:
+      context: .
+      dockerfile: src/HardLock.Encryption/Dockerfile
+    container_name: hardlock-encryption
+    ports:
+      - "5002:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - Vault__Address=http://vault:8200
+      - Vault__Token=hardlock-vault-token
+    depends_on:
+      - vault
+    networks:
+      - hardlock-network
+
+  # Storage Service
+  storage-service:
+    build:
+      context: .
+      dockerfile: src/HardLock.Storage/Dockerfile
+    container_name: hardlock-storage
+    ports:
+      - "5003:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - AWS__AccessKeyId=${AWS_ACCESS_KEY_ID}
+      - AWS__SecretAccessKey=${AWS_SECRET_ACCESS_KEY}
+      - AWS__Region=${AWS_REGION:-us-east-1}
+      - AWS__S3Bucket=${AWS_S3_BUCKET:-hardlock-files}
+      - AWS__GlacierVault=${AWS_GLACIER_VAULT:-hardlock-backup}
+    networks:
+      - hardlock-network
+
+  # Access Control Service
+  access-control-service:
+    build:
+      context: .
+      dockerfile: src/HardLock.AccessControl/Dockerfile
+    container_name: hardlock-access-control
+    ports:
+      - "5004:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Data Source=hardlock.db
+    volumes:
+      - ./data:/app/data
+    networks:
+      - hardlock-network
+
+  # Cold Wallet Service
+  cold-wallet-service:
+    build:
+      context: .
+      dockerfile: src/HardLock.ColdWallet/Dockerfile
+    container_name: hardlock-cold-wallet
+    ports:
+      - "5005:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - AWS__AccessKeyId=${AWS_ACCESS_KEY_ID}
+      - AWS__SecretAccessKey=${AWS_SECRET_ACCESS_KEY}
+      - AWS__Region=${AWS_REGION:-us-east-1}
+      - AWS__GlacierVault=${AWS_GLACIER_VAULT:-hardlock-backup}
+    networks:
+      - hardlock-network
+
+  # Audit Service
+  audit-service:
+    build:
+      context: .
+      dockerfile: src/HardLock.Audit/Dockerfile
+    container_name: hardlock-audit
+    ports:
+      - "5006:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=Data Source=hardlock.db
+      - Elasticsearch__Url=http://elasticsearch:9200
+    volumes:
+      - ./data:/app/data
+    depends_on:
+      - elasticsearch
+    networks:
+      - hardlock-network
+
+  # Notification Service
+  notification-service:
+    build:
+      context: .
+      dockerfile: src/HardLock.Notification/Dockerfile
+    container_name: hardlock-notification
+    ports:
+      - "5007:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - Redis__ConnectionString=redis:6379
+      - SMTP__Host=${SMTP_HOST}
+      - SMTP__Port=${SMTP_PORT:-587}
+      - SMTP__Username=${SMTP_USERNAME}
+      - SMTP__Password=${SMTP_PASSWORD}
+    depends_on:
+      - redis
+    networks:
+      - hardlock-network
+
+  # API Gateway
+  gateway:
+    build:
+      context: .
+      dockerfile: src/HardLock.Gateway/Dockerfile
+    container_name: hardlock-gateway
+    ports:
+      - "8080:80"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - IdentityService__Url=http://identity-service
+      - EncryptionService__Url=http://encryption-service
+      - StorageService__Url=http://storage-service
+      - AccessControlService__Url=http://access-control-service
+      - ColdWalletService__Url=http://cold-wallet-service
+      - AuditService__Url=http://audit-service
+      - NotificationService__Url=http://notification-service
+    depends_on:
+      - identity-service
+      - encryption-service
+      - storage-service
+      - access-control-service
+      - cold-wallet-service
+      - audit-service
+      - notification-service
+    networks:
+      - hardlock-network
+
+  # Darknet Infrastructure
+  ipfs:
+    image: ipfs/kubo:latest
+    container_name: hardlock-ipfs
+    ports:
+      - "4001:4001"   # P2P port
+      - "5001:5001"   # API port
+      - "8080:8080"   # Gateway port
+    volumes:
+      - ipfs_data:/data/ipfs
+    environment:
+      - IPFS_PROFILE=server
+    command: daemon --migrate=true --agent-version-suffix=docker
+    networks:
+      - hardlock-network
+
+  tor:
+    image: dperson/torproxy:latest
+    container_name: hardlock-tor
+    ports:
+      - "9050:9050"   # SOCKS proxy
+      - "9051:9051"   # Control port
+    volumes:
+      - tor_data:/var/lib/tor
+    environment:
+      - TZ=UTC
+    command: -p 9050 -p 9051
+    networks:
+      - hardlock-network
+
+  # Darknet IPFS Nodes (Simulated)
+  darknet-node-1:
+    image: ipfs/kubo:latest
+    container_name: hardlock-darknet-node-1
+    ports:
+      - "5002:5001"
+    volumes:
+      - darknet_node_1:/data/ipfs
+    environment:
+      - IPFS_PROFILE=server
+    command: daemon --migrate=true --agent-version-suffix=darknet
+    networks:
+      - hardnet-network
+
+  darknet-node-2:
+    image: ipfs/kubo:latest
+    container_name: hardlock-darknet-node-2
+    ports:
+      - "5003:5001"
+    volumes:
+      - darknet_node_2:/data/ipfs
+    environment:
+      - IPFS_PROFILE=server
+    command: daemon --migrate=true --agent-version-suffix=darknet
+    networks:
+      - hardnet-network
+
+  darknet-node-3:
+    image: ipfs/kubo:latest
+    container_name: hardlock-darknet-node-3
+    ports:
+      - "5004:5001"
+    volumes:
+      - darknet_node_3:/data/ipfs
+    environment:
+      - IPFS_PROFILE=server
+    command: daemon --migrate=true --agent-version-suffix=darknet
+    networks:
+      - hardnet-network
+
+  # Frontend Application
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: hardlock-frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - REACT_APP_API_URL=http://localhost:8080
+      - CHOKIDAR_USEPOLLING=true
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - gateway
+    networks:
+      - hardlock-network
+
+volumes:
+  # postgres_data:  # SQLite kullandığımız için kaldırıyoruz
+  redis_data:
+  prometheus_data:
+  grafana_data:
+  elasticsearch_data:
+  ipfs_data:
+  tor_data:
+  darknet_node_1:
+  darknet_node_2:
+  darknet_node_3:
+
+networks:
+  hardlock-network:
+    driver: bridge
+  hardnet-network:
+    driver: bridge
+    internal: true 

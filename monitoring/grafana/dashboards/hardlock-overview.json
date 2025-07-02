@@ -1,0 +1,117 @@
+{
+  "dashboard": {
+    "id": null,
+    "title": "HARDLOCK System Overview",
+    "tags": ["hardlock", "security", "monitoring"],
+    "style": "dark",
+    "timezone": "browser",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Service Health",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "up{job=~\".*hardlock.*\"}",
+            "legendFormat": "{{job}}"
+          }
+        ],
+        "fieldConfig": {
+          "defaults": {
+            "color": {
+              "mode": "thresholds"
+            },
+            "thresholds": {
+              "steps": [
+                {"color": "red", "value": 0},
+                {"color": "green", "value": 1}
+              ]
+            }
+          }
+        }
+      },
+      {
+        "id": 2,
+        "title": "Request Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total[5m])",
+            "legendFormat": "{{job}} - {{method}}"
+          }
+        ]
+      },
+      {
+        "id": 3,
+        "title": "Response Time",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))",
+            "legendFormat": "{{job}} - 95th percentile"
+          }
+        ]
+      },
+      {
+        "id": 4,
+        "title": "Error Rate",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{status=~\".*5.*\"}[5m])",
+            "legendFormat": "{{job}} - 5xx errors"
+          }
+        ]
+      },
+      {
+        "id": 5,
+        "title": "Active Users",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "hardlock_active_users_total",
+            "legendFormat": "Active Users"
+          }
+        ]
+      },
+      {
+        "id": 6,
+        "title": "Files Encrypted Today",
+        "type": "stat",
+        "targets": [
+          {
+            "expr": "increase(hardlock_files_encrypted_total[24h])",
+            "legendFormat": "Files Encrypted (24h)"
+          }
+        ]
+      },
+      {
+        "id": 7,
+        "title": "Security Events",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "rate(hardlock_security_events_total[5m])",
+            "legendFormat": "{{event_type}}"
+          }
+        ]
+      },
+      {
+        "id": 8,
+        "title": "Storage Usage",
+        "type": "graph",
+        "targets": [
+          {
+            "expr": "hardlock_storage_bytes_used",
+            "legendFormat": "{{storage_type}}"
+          }
+        ]
+      }
+    ],
+    "time": {
+      "from": "now-1h",
+      "to": "now"
+    },
+    "refresh": "30s"
+  }
+} 
