@@ -3,7 +3,7 @@ using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.IdentityModel.Tokens;
-using HardLock.Shared.Models;
+using HardLock.Identity.Models;
 
 namespace HardLock.Identity.Services;
 

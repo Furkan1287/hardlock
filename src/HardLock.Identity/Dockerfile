@@ -19,4 +19,5 @@ RUN dotnet publish "HardLock.Identity.csproj" -c Release -o /app/publish /p:UseA
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+COPY src/HardLock.Identity/appsettings.json ./
 ENTRYPOINT ["dotnet", "HardLock.Identity.dll"] 

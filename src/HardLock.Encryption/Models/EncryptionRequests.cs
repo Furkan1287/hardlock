@@ -1,4 +1,6 @@
 using System.ComponentModel.DataAnnotations;
+using HardLock.Security.Encryption;
+using HardLock.Shared.Models;
 
 namespace HardLock.Encryption.Models;
 
@@ -106,6 +108,9 @@ public class TimelockDecryptionRequest
     [Required]
     public string TimelockPrivateKey { get; set; } = string.Empty;
     
+    [Required]
+    public string TimelockEncryptedKey { get; set; } = string.Empty;
+    
     public DateTime? UnlockAt { get; set; }
     public long? BlockNumber { get; set; }
 }
@@ -161,7 +166,7 @@ public class GeoFencingValidationRequest
     public List<string>? AllowedCountries { get; set; }
     public List<string>? AllowedCities { get; set; }
     public List<GeoRadius>? AllowedLocations { get; set; }
-    public List<List<GeoLocation>>? AllowedPolygons { get; set; }
+    public List<List<HardLock.Shared.Models.GeoLocation>>? AllowedPolygons { get; set; }
 }
 
 // File Hashing Models

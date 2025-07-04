@@ -85,7 +85,7 @@ const authReducer = (state: AuthState, action: AuthAction): AuthState => {
   }
 };
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
@@ -118,6 +118,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
           if (response.ok) {
             const user = await response.json();
+            console.log('initializeAuth user:', user);
             dispatch({
               type: 'AUTH_SUCCESS',
               payload: { user, token },
@@ -152,6 +153,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       if (response.ok) {
         const data = await response.json();
+        console.log('login data:', data);
         localStorage.setItem('token', data.accessToken);
         localStorage.setItem('refreshToken', data.refreshToken);
 

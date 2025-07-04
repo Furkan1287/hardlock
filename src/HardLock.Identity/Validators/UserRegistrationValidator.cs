@@ -1,5 +1,5 @@
 using FluentValidation;
-using HardLock.Shared.Models;
+using HardLock.Identity.Models;
 
 namespace HardLock.Identity.Validators;
 
@@ -15,19 +15,23 @@ public class UserRegistrationValidator : AbstractValidator<UserRegistrationReque
 
         RuleFor(x => x.Password)
             .NotEmpty()
-            .MinimumLength(8)
+            .MinimumLength(6)
             .MaximumLength(128)
             .Matches(@"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]")
             .WithMessage("Password must contain at least one uppercase letter, one lowercase letter, one number, and one special character");
 
         RuleFor(x => x.FirstName)
+            .NotEmpty()
             .MaximumLength(100)
-            .When(x => !string.IsNullOrEmpty(x.FirstName))
-            .WithMessage("First name cannot exceed 100 characters");
+            .WithMessage("First name is required and cannot exceed 100 characters");
 
         RuleFor(x => x.LastName)
+            .NotEmpty()
             .MaximumLength(100)
-            .When(x => !string.IsNullOrEmpty(x.LastName))
-            .WithMessage("Last name cannot exceed 100 characters");
+            .WithMessage("Last name is required and cannot exceed 100 characters");
+
+        RuleFor(x => x.ConfirmPassword)
+            .Equal(x => x.Password)
+            .WithMessage("Passwords must match");
     }
 } 

@@ -1,45 +1,43 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import { Bell, Search, Moon, Sun, LogOut } from 'lucide-react';
-import { useAuth } from '../../contexts/AuthContext';
-import { useTheme } from '../../contexts/ThemeContext';
+import { useAuth } from '../../contexts/AuthContext.tsx';
+import { useTheme } from '../../contexts/ThemeContext.tsx';
+import { AuthContext } from '../../contexts/AuthContext.tsx';
 
 const Header: React.FC = () => {
   const { logout } = useAuth();
   const { theme, toggleTheme } = useTheme();
 
   return (
-    <header className="bg-dark-800 border-b border-dark-700 px-6 py-4">
+    <header className="bg-dark-900 border-b border-dark-800 px-8 py-5 shadow-inner-glow animate-fade-in">
       <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-dark-400" />
+        <div className="flex items-center space-x-6">
+          <div className="relative w-96">
+            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-danger-500" />
             <input
               type="text"
               placeholder="Search files, users, or settings..."
-              className="pl-10 pr-4 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white placeholder-dark-400 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent w-80"
+              className="pl-12 pr-4 py-3 bg-dark-800 border border-dark-700 rounded-xl text-white placeholder-dark-400 focus:outline-none focus:ring-2 focus:ring-danger-500 focus:border-transparent w-full transition-all duration-200"
             />
           </div>
         </div>
-
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-6">
           <button
             onClick={toggleTheme}
-            className="p-2 text-dark-400 hover:text-white hover:bg-dark-700 rounded-lg transition-colors duration-200"
+            className="p-3 text-danger-500 hover:text-white hover:bg-dark-800 rounded-xl transition-colors duration-200"
           >
-            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
+            {theme === 'dark' ? <Sun className="w-6 h-6" /> : <Moon className="w-6 h-6" />}
           </button>
-
-          <button className="relative p-2 text-dark-400 hover:text-white hover:bg-dark-700 rounded-lg transition-colors duration-200">
-            <Bell className="w-5 h-5" />
-            <span className="absolute top-1 right-1 w-2 h-2 bg-danger-500 rounded-full"></span>
+          <button className="relative p-3 text-danger-500 hover:text-white hover:bg-dark-800 rounded-xl transition-colors duration-200 animate-pulse-glow">
+            <Bell className="w-6 h-6" />
+            <span className="absolute top-2 right-2 w-3 h-3 bg-danger-500 rounded-full border-2 border-dark-900 animate-ping"></span>
           </button>
-
           <button
             onClick={logout}
-            className="flex items-center space-x-2 px-3 py-2 text-dark-400 hover:text-white hover:bg-dark-700 rounded-lg transition-colors duration-200"
+            className="flex items-center space-x-2 px-4 py-3 text-danger-400 hover:text-white hover:bg-danger-700/80 rounded-xl transition-colors duration-200"
           >
-            <LogOut className="w-4 h-4" />
-            <span className="text-sm">Logout</span>
+            <LogOut className="w-5 h-5" />
+            <span className="text-base font-semibold">Logout</span>
           </button>
         </div>
       </div>

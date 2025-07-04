@@ -1,16 +1,13 @@
-using HardLock.Shared.Models;
+using HardLock.Identity.Models;
 
 namespace HardLock.Identity.Repositories;
 
 public interface IUserRepository
 {
-    Task<User?> GetByIdAsync(Guid id);
-    Task<User?> GetByEmailAsync(string email);
-    Task<IEnumerable<User>> GetAllAsync();
-    Task<User> CreateAsync(User user);
-    Task<User> UpdateAsync(User user);
-    Task<bool> DeleteAsync(Guid id);
-    Task<bool> ExistsAsync(string email);
-    Task<bool> ValidatePasswordAsync(string email, string passwordHash);
-    Task UpdateLastLoginAsync(Guid id);
+    Task<UserResponse?> GetUserByEmailAsync(string email);
+    Task<UserResponse?> GetUserByIdAsync(Guid id);
+    Task<UserResponse> CreateUserAsync(UserRegistrationRequest request, string hashedPassword);
+    Task<bool> UpdateUserAsync(Guid id, UserUpdateRequest request);
+    Task<bool> UpdateLastLoginAsync(Guid id);
+    Task<string?> GetPasswordHashAsync(string email);
 } 

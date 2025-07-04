@@ -8,13 +8,6 @@ public class RefreshTokenRequest
     public string RefreshToken { get; set; } = string.Empty;
 }
 
-public class UserUpdateRequest
-{
-    public string? FirstName { get; set; }
-    public string? LastName { get; set; }
-    public bool? RequiresMfa { get; set; }
-}
-
 public class AuthResponse
 {
     public string AccessToken { get; set; } = string.Empty;

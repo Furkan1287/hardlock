@@ -54,7 +54,7 @@ public class DarknetBackupService : IDarknetBackupService
             _logger.LogInformation("File sharded into {ShardCount} pieces", shards.Count);
 
             // Step 2: Encrypt each shard
-            var encryptedShards = new List<EncryptedShard>();
+            var encryptedShards = new List<DarknetEncryptedShard>();
             foreach (var shard in shards)
             {
                 var encryptedShard = await EncryptShardAsync(shard, options.EncryptionKey);
@@ -126,13 +126,13 @@ public class DarknetBackupService : IDarknetBackupService
             }
 
             // Step 2: Download all shards from IPFS
-            var encryptedShards = new List<EncryptedShard>();
+            var encryptedShards = new List<DarknetEncryptedShard>();
             foreach (var hash in dhtEntry.ContentHashes)
             {
                 var shardData = await DownloadFromIPFSAsync(hash);
                 if (shardData != null)
                 {
-                    encryptedShards.Add(new EncryptedShard { Data = shardData });
+                    encryptedShards.Add(new DarknetEncryptedShard { Data = shardData });
                 }
             }
 
@@ -150,7 +150,7 @@ public class DarknetBackupService : IDarknetBackupService
             }
 
             // Step 4: Reassemble file
-            var reassembledFile = await ReassembleFileAsync(decryptedShards, dhtEntry.OriginalSize);
+            var reassembledFile = await ReassembleFileAsync(decryptedShards, (int)dhtEntry.OriginalSize);
 
             _logger.LogInformation("Darknet restore completed successfully");
             return reassembledFile;
@@ -285,7 +285,7 @@ public class DarknetBackupService : IDarknetBackupService
         return shards;
     }
 
-    private async Task<EncryptedShard> EncryptShardAsync(byte[] shardData, string encryptionKey)
+    private async Task<DarknetEncryptedShard> EncryptShardAsync(byte[] shardData, string encryptionKey)
     {
         using var aes = Aes.Create();
         aes.KeySize = 256;
@@ -295,7 +295,7 @@ public class DarknetBackupService : IDarknetBackupService
         using var encryptor = aes.CreateEncryptor();
         var encryptedData = encryptor.TransformFinalBlock(shardData, 0, shardData.Length);
 
-        return new EncryptedShard
+        return new DarknetEncryptedShard
         {
             Data = encryptedData,
             Key = Convert.ToBase64String(aes.Key),
@@ -303,7 +303,7 @@ public class DarknetBackupService : IDarknetBackupService
         };
     }
 
-    private async Task<byte[]> DecryptShardAsync(EncryptedShard shard, string encryptionKey)
+    private async Task<byte[]> DecryptShardAsync(DarknetEncryptedShard shard, string encryptionKey)
     {
         using var aes = Aes.Create();
         aes.Key = Convert.FromBase64String(shard.Key);
@@ -497,7 +497,7 @@ public class DarknetNodeInfo
     public string ProtocolVersion { get; set; } = string.Empty;
 }
 
-public class EncryptedShard
+public class DarknetEncryptedShard
 {
     public byte[] Data { get; set; } = Array.Empty<byte>();
     public string Key { get; set; } = string.Empty;

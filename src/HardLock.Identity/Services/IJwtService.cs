@@ -1,5 +1,5 @@
 using System.Security.Claims;
-using HardLock.Shared.Models;
+using HardLock.Identity.Models;
 
 namespace HardLock.Identity.Services;
 

@@ -30,7 +30,8 @@ public class UserService : IUserService
         _logger.LogInformation("Registering new user: {Email}", request.Email);
 
         // Check if user already exists
-        if (await UserExistsAsync(request.Email))
+        var existingUser = await _userRepository.GetUserByEmailAsync(request.Email);
+        if (existingUser != null)
         {
             throw new InvalidOperationException("User with this email already exists");
         }
@@ -39,26 +40,11 @@ public class UserService : IUserService
         var passwordHash = await _keyDerivationService.HashPasswordAsync(request.Password);
 
         // Create user
-        var user = new User
-        {
-            Id = Guid.NewGuid(),
-            Email = request.Email.ToLowerInvariant(),
-            PasswordHash = passwordHash,
-            FirstName = request.FirstName,
-            LastName = request.LastName,
-            RequiresMfa = request.RequiresMfa,
-            Roles = new List<string> { "User" },
-            CreatedAt = DateTime.UtcNow
-        };
-
-        await _userRepository.CreateAsync(user);
-
-        // Cache user data
-        await CacheUserAsync(user);
+        var user = await _userRepository.CreateUserAsync(request, passwordHash);
 
         _logger.LogInformation("User registered successfully: {UserId}", user.Id);
 
-        return MapToUserResponse(user);
+        return user;
     }
 
     public async Task<UserResponse?> GetUserByEmailAsync(string email)
@@ -68,19 +54,17 @@ public class UserService : IUserService
 
         if (!string.IsNullOrEmpty(cachedUser))
         {
-            var user = JsonSerializer.Deserialize<User>(cachedUser);
-            return user != null ? MapToUserResponse(user) : null;
+            return JsonSerializer.Deserialize<UserResponse>(cachedUser);
         }
 
-        var dbUser = await _userRepository.GetByEmailAsync(email);
+        var dbUser = await _userRepository.GetUserByEmailAsync(email);
 
         if (dbUser != null)
         {
             await CacheUserAsync(dbUser);
-            return MapToUserResponse(dbUser);
         }
 
-        return null;
+        return dbUser;
     }
 
     public async Task<UserResponse?> GetUserByIdAsync(Guid id)
@@ -90,57 +74,55 @@ public class UserService : IUserService
 
         if (!string.IsNullOrEmpty(cachedUser))
         {
-            var user = JsonSerializer.Deserialize<User>(cachedUser);
-            return user != null ? MapToUserResponse(user) : null;
+            return JsonSerializer.Deserialize<UserResponse>(cachedUser);
         }
 
-        var dbUser = await _userRepository.GetByIdAsync(id);
+        var dbUser = await _userRepository.GetUserByIdAsync(id);
 
         if (dbUser != null)
         {
             await CacheUserAsync(dbUser);
-            return MapToUserResponse(dbUser);
         }
 
-        return null;
+        return dbUser;
     }
 
     public async Task<UserResponse> UpdateUserAsync(Guid id, UserUpdateRequest request)
     {
-        var user = await _userRepository.GetByIdAsync(id);
+        var user = await _userRepository.GetUserByIdAsync(id);
         if (user == null)
         {
             throw new InvalidOperationException("User not found");
         }
 
-        // Update fields
-        if (!string.IsNullOrEmpty(request.FirstName))
-            user.FirstName = request.FirstName;
-        
-        if (!string.IsNullOrEmpty(request.LastName))
-            user.LastName = request.LastName;
-        
-        if (request.RequiresMfa.HasValue)
-            user.RequiresMfa = request.RequiresMfa.Value;
+        var success = await _userRepository.UpdateUserAsync(id, request);
+        if (!success)
+        {
+            throw new InvalidOperationException("Failed to update user");
+        }
 
-        await _userRepository.UpdateAsync(user);
+        // Get updated user
+        var updatedUser = await _userRepository.GetUserByIdAsync(id);
+        if (updatedUser == null)
+        {
+            throw new InvalidOperationException("Failed to retrieve updated user");
+        }
 
         // Update cache
-        await CacheUserAsync(user);
+        await CacheUserAsync(updatedUser);
 
         _logger.LogInformation("User updated: {UserId}", id);
 
-        return MapToUserResponse(user);
+        return updatedUser;
     }
 
     public async Task<bool> ValidatePasswordAsync(string email, string password)
     {
-        var user = await _userRepository.GetByEmailAsync(email);
-
-        if (user == null)
+        var passwordHash = await _userRepository.GetPasswordHashAsync(email);
+        if (passwordHash == null)
             return false;
 
-        return await _keyDerivationService.VerifyPasswordAsync(password, user.PasswordHash);
+        return await _keyDerivationService.VerifyPasswordAsync(password, passwordHash);
     }
 
     public async Task LogoutAsync(Guid userId)
@@ -153,10 +135,11 @@ public class UserService : IUserService
 
     public async Task<bool> UserExistsAsync(string email)
     {
-        return await _userRepository.ExistsAsync(email);
+        var user = await _userRepository.GetUserByEmailAsync(email);
+        return user != null;
     }
 
-    private async Task CacheUserAsync(User user)
+    private async Task CacheUserAsync(UserResponse user)
     {
         var userJson = JsonSerializer.Serialize(user);
         var cacheOptions = new DistributedCacheEntryOptions
@@ -166,21 +149,5 @@ public class UserService : IUserService
 
         await _cache.SetStringAsync($"user:id:{user.Id}", userJson, cacheOptions);
         await _cache.SetStringAsync($"user:email:{user.Email}", userJson, cacheOptions);
-    }
-
-    private static UserResponse MapToUserResponse(User user)
-    {
-        return new UserResponse
-        {
-            Id = user.Id,
-            Email = user.Email,
-            FirstName = user.FirstName,
-            LastName = user.LastName,
-            IsActive = user.IsActive,
-            RequiresMfa = user.RequiresMfa,
-            CreatedAt = user.CreatedAt,
-            LastLoginAt = user.LastLoginAt,
-            Roles = user.Roles
-        };
     }
 } 

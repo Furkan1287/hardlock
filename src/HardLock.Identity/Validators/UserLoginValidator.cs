@@ -1,5 +1,5 @@
 using FluentValidation;
-using HardLock.Shared.Models;
+using HardLock.Identity.Models;
 
 namespace HardLock.Identity.Validators;
 

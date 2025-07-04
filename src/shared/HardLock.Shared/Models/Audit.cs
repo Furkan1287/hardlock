@@ -5,29 +5,34 @@ namespace HardLock.Shared.Models;
 public class AuditLog
 {
     public Guid Id { get; set; }
-    public Guid UserId { get; set; }
-    public string UserEmail { get; set; } = string.Empty;
-    
-    public string Service { get; set; } = string.Empty;
+    public string UserId { get; set; } = string.Empty;
     public string Action { get; set; } = string.Empty;
     public string ResourceType { get; set; } = string.Empty;
-    public string ResourceId { get; set; } = string.Empty;
-    
-    public AuditSeverity Severity { get; set; } = AuditSeverity.Info;
-    public AuditStatus Status { get; set; } = AuditStatus.Success;
-    
+    public string? ResourceId { get; set; }
+    public string? Description { get; set; }
     public string? IpAddress { get; set; }
     public string? UserAgent { get; set; }
-    public GeoLocation? Location { get; set; }
-    
-    public string? RequestData { get; set; }
-    public string? ResponseData { get; set; }
-    public string? ErrorMessage { get; set; }
-    
-    public Dictionary<string, string> Metadata { get; set; } = new();
-    
+    public string? Location { get; set; }
+    public string? Metadata { get; set; } // JSON string
+    public string Severity { get; set; } = string.Empty;
+    public string? Service { get; set; }
     public DateTime Timestamp { get; set; } = DateTime.UtcNow;
-    public TimeSpan Duration { get; set; }
+}
+
+public class SecurityAlert
+{
+    public Guid Id { get; set; }
+    public string AlertType { get; set; } = string.Empty;
+    public string Title { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public string Severity { get; set; } = string.Empty;
+    public string? UserId { get; set; }
+    public string? ResourceId { get; set; }
+    public string? IpAddress { get; set; }
+    public string? Context { get; set; } // JSON string
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public bool IsResolved { get; set; } = false;
+    public DateTime? ResolvedAt { get; set; }
 }
 
 public class SecurityEvent

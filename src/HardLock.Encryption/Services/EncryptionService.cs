@@ -223,7 +223,7 @@ public class EncryptionService : IEncryptionService
             var encryptedData = await _fileEncryptionService.EncryptFileAsync(request.FileData, request.Password, options);
             
             // Encrypt the file key with timelock
-            var encryptedFileKey = await _timelockService.EncryptFileKeyAsync(encryptedData.Key, timelockKeys.PublicKey);
+            var encryptedFileKey = await _timelockService.EncryptFileKeyAsync(request.Password, timelockKeys.PublicKey);
 
             stopwatch.Stop();
 

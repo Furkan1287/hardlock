@@ -16,7 +16,7 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #0f172a;
+  background-color: #0a0a0a;
   color: #f8fafc;
 }
 
@@ -89,24 +89,24 @@ code {
 
 /* Glass Effect */
 .glass {
-  background: rgba(30, 41, 59, 0.8);
-  backdrop-filter: blur(10px);
-  border: 1px solid rgba(148, 163, 184, 0.1);
+  background: rgba(20, 20, 20, 0.85);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(239, 68, 68, 0.12);
 }
 
 .glass-light {
-  background: rgba(248, 250, 252, 0.1);
+  background: rgba(239, 68, 68, 0.08);
   backdrop-filter: blur(10px);
-  border: 1px solid rgba(148, 163, 184, 0.2);
+  border: 1px solid rgba(239, 68, 68, 0.18);
 }
 
 /* Gradient Backgrounds */
 .gradient-primary {
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
+  background: linear-gradient(135deg, #ef4444 0%, #991b1b 100%);
 }
 
 .gradient-dark {
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  background: linear-gradient(135deg, #0a0a0a 0%, #1e293b 100%);
 }
 
 .gradient-success {
@@ -123,7 +123,7 @@ code {
 
 /* Button Styles */
 .btn-primary {
-  @apply bg-primary-600 hover:bg-primary-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-dark-900;
+  @apply bg-danger-600 hover:bg-danger-700 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-danger-500 focus:ring-offset-2 focus:ring-offset-dark-900;
 }
 
 .btn-secondary {

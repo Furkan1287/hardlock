@@ -6,7 +6,10 @@ using Serilog;
 using HardLock.Identity.Data;
 using HardLock.Identity.Services;
 using HardLock.Identity.Validators;
+using HardLock.Identity.Models;
+using HardLock.Identity.Repositories;
 using HardLock.Security.Encryption;
+using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -18,7 +21,7 @@ Log.Logger = new LoggerConfiguration()
     .WriteTo.Elasticsearch(new Serilog.Sinks.Elasticsearch.ElasticsearchSinkOptions(new Uri(builder.Configuration["Elasticsearch:Url"] ?? "http://localhost:9200"))
     {
         AutoRegisterTemplate = true,
-        AutoRegisterTemplateVersion = AutoRegisterTemplateVersion.ESv7
+        AutoRegisterTemplateVersion = Serilog.Sinks.Elasticsearch.AutoRegisterTemplateVersion.ESv7
     })
     .CreateLogger();
 
@@ -140,8 +143,7 @@ app.MapPost("/api/auth/register", async (UserRegistrationRequest request, IUserS
         return Results.BadRequest(new { Error = "Registration failed", Details = ex.Message });
     }
 })
-.WithName("RegisterUser")
-.WithOpenApi();
+.WithName("RegisterUser");
 
 app.MapPost("/api/auth/login", async (UserLoginRequest request, IAuthService authService, UserLoginValidator validator) =>
 {
@@ -162,8 +164,7 @@ app.MapPost("/api/auth/login", async (UserLoginRequest request, IAuthService aut
         return Results.Unauthorized();
     }
 })
-.WithName("LoginUser")
-.WithOpenApi();
+.WithName("LoginUser");
 
 app.MapPost("/api/auth/refresh", async (RefreshTokenRequest request, IAuthService authService) =>
 {
@@ -178,8 +179,7 @@ app.MapPost("/api/auth/refresh", async (RefreshTokenRequest request, IAuthServic
         return Results.Unauthorized();
     }
 })
-.WithName("RefreshToken")
-.WithOpenApi();
+.WithName("RefreshToken");
 
 app.MapGet("/api/auth/me", async (IUserService userService, HttpContext context) =>
 {
@@ -200,18 +200,10 @@ app.MapGet("/api/auth/me", async (IUserService userService, HttpContext context)
         return Results.NotFound();
     }
 })
-.WithName("GetUserProfile")
-.WithOpenApi()
 .RequireAuthorization();
 
-app.MapPut("/api/auth/me", async (UserUpdateRequest request, IUserService userService, HttpContext context) =>
+app.MapPut("/api/users/{id}", async (Guid id, UserUpdateRequest request, IUserService userService) =>
 {
-    var userId = context.User.FindFirst("sub")?.Value;
-    if (string.IsNullOrEmpty(userId) || !Guid.TryParse(userId, out var id))
-    {
-        return Results.Unauthorized();
-    }
-
     try
     {
         var user = await userService.UpdateUserAsync(id, request);
@@ -219,38 +211,10 @@ app.MapPut("/api/auth/me", async (UserUpdateRequest request, IUserService userSe
     }
     catch (Exception ex)
     {
-        Log.Error(ex, "Error updating user profile");
+        Log.Error(ex, "Error updating user");
         return Results.BadRequest(new { Error = "Update failed", Details = ex.Message });
     }
 })
-.WithName("UpdateUserProfile")
-.WithOpenApi()
 .RequireAuthorization();
-
-app.MapPost("/api/auth/logout", async (IUserService userService, HttpContext context) =>
-{
-    var userId = context.User.FindFirst("sub")?.Value;
-    if (!string.IsNullOrEmpty(userId) && Guid.TryParse(userId, out var id))
-    {
-        await userService.LogoutAsync(id);
-    }
-    
-    return Results.Ok(new { Message = "Logged out successfully" });
-})
-.WithName("LogoutUser")
-.WithOpenApi()
-.RequireAuthorization();
-
-// Health check endpoint
-app.MapGet("/health", () => Results.Ok(new { Status = "Healthy", Timestamp = DateTime.UtcNow }))
-    .WithName("HealthCheck")
-    .WithOpenApi();
-
-// Ensure database is created
-using (var scope = app.Services.CreateScope())
-{
-    var context = scope.ServiceProvider.GetRequiredService<IdentityDbContext>();
-    await context.Database.EnsureCreatedAsync();
-}
 
 app.Run(); 

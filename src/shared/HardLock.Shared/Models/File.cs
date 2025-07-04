@@ -2,51 +2,18 @@ using System.ComponentModel.DataAnnotations;
 
 namespace HardLock.Shared.Models;
 
-public class FileMetadata
+public class File
 {
     public Guid Id { get; set; }
-    public Guid OwnerId { get; set; }
-    
-    [Required]
+    public string UserId { get; set; } = string.Empty;
     public string FileName { get; set; } = string.Empty;
-    
-    public string? OriginalFileName { get; set; }
-    public string ContentType { get; set; } = "application/octet-stream";
+    public string FilePath { get; set; } = string.Empty;
+    public string ContentType { get; set; } = string.Empty;
     public long FileSize { get; set; }
-    
-    public string FileHash { get; set; } = string.Empty;
-    public string EncryptionHash { get; set; } = string.Empty;
-    
-    public bool IsEncrypted { get; set; } = true;
-    public bool IsSharded { get; set; } = false;
-    public int ShardCount { get; set; } = 1;
-    
-    public DateTime? ExpiresAt { get; set; }
-    public DateTime? UnlockAt { get; set; } // Timelock decryption
-    
-    // Advanced Timelock Properties
-    public bool HasTimelock { get; set; } = false;
-    public long? TimelockBlockNumber { get; set; } // Ethereum block number
-    public string? TimelockEncryptedKey { get; set; } // ECDSA encrypted file key
-    public string? TimelockPublicKey { get; set; } // ECDSA public key for verification
-    public TimelockType TimelockType { get; set; } = TimelockType.None;
-    
-    public GeoLocation? AllowedLocation { get; set; }
-    public double? AllowedRadius { get; set; } // meters
-    
-    public bool SelfDestructEnabled { get; set; } = true;
-    public int MaxAccessAttempts { get; set; } = 3;
-    public int CurrentAccessAttempts { get; set; } = 0;
-    
-    public FileStatus Status { get; set; } = FileStatus.Active;
-    public FileAccessLevel AccessLevel { get; set; } = FileAccessLevel.Private;
-    
-    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-    public DateTime? LastAccessedAt { get; set; }
-    public DateTime? LastModifiedAt { get; set; }
-    
-    public Dictionary<string, string> Metadata { get; set; } = new();
-    public List<FileAccess> AccessList { get; set; } = new();
+    public bool IsEncrypted { get; set; }
+    public string StorageTier { get; set; } = "hot";
+    public DateTime CreatedAt { get; set; }
+    public DateTime UpdatedAt { get; set; }
 }
 
 public class FileAccess

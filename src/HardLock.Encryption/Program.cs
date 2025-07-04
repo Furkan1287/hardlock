@@ -5,6 +5,9 @@ using Serilog;
 using HardLock.Encryption.Services;
 using HardLock.Encryption.Validators;
 using HardLock.Security.Encryption;
+using HardLock.Encryption.Models;
+using Microsoft.OpenApi.Models;
+using Swashbuckle.AspNetCore.SwaggerGen;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -16,7 +19,7 @@ Log.Logger = new LoggerConfiguration()
     .WriteTo.Elasticsearch(new Serilog.Sinks.Elasticsearch.ElasticsearchSinkOptions(new Uri(builder.Configuration["Elasticsearch:Url"] ?? "http://localhost:9200"))
     {
         AutoRegisterTemplate = true,
-        AutoRegisterTemplateVersion = AutoRegisterTemplateVersion.ESv7
+        AutoRegisterTemplateVersion = Serilog.Sinks.Elasticsearch.AutoRegisterTemplateVersion.ESv7
     })
     .CreateLogger();
 
@@ -130,7 +133,6 @@ app.MapPost("/api/encrypt", async (FileEncryptionRequest request, IEncryptionSer
     }
 })
 .WithName("EncryptFile")
-.WithOpenApi()
 .RequireAuthorization();
 
 app.MapPost("/api/decrypt", async (FileDecryptionRequest request, IEncryptionService encryptionService) =>
@@ -147,7 +149,6 @@ app.MapPost("/api/decrypt", async (FileDecryptionRequest request, IEncryptionSer
     }
 })
 .WithName("DecryptFile")
-.WithOpenApi()
 .RequireAuthorization();
 
 app.MapPost("/api/encrypt/shard", async (ShardEncryptionRequest request, IEncryptionService encryptionService) =>
@@ -164,7 +165,6 @@ app.MapPost("/api/encrypt/shard", async (ShardEncryptionRequest request, IEncryp
     }
 })
 .WithName("ShardEncryptFile")
-.WithOpenApi()
 .RequireAuthorization();
 
 app.MapPost("/api/decrypt/shard", async (ShardDecryptionRequest request, IEncryptionService encryptionService) =>
@@ -181,7 +181,6 @@ app.MapPost("/api/decrypt/shard", async (ShardDecryptionRequest request, IEncryp
     }
 })
 .WithName("ShardDecryptFile")
-.WithOpenApi()
 .RequireAuthorization();
 
 app.MapPost("/api/validate-password", async (PasswordValidationRequest request, IEncryptionService encryptionService) =>
@@ -198,7 +197,6 @@ app.MapPost("/api/validate-password", async (PasswordValidationRequest request, 
     }
 })
 .WithName("ValidatePassword")
-.WithOpenApi()
 .RequireAuthorization();
 
 // Health check endpoint
@@ -220,7 +218,6 @@ app.MapPost("/api/timelock/encrypt", async (TimelockEncryptionRequest request, I
     }
 })
 .WithName("TimelockEncrypt")
-.WithOpenApi()
 .RequireAuthorization();
 
 app.MapPost("/api/timelock/decrypt", async (TimelockDecryptionRequest request, IEncryptionService encryptionService) =>
@@ -237,7 +234,6 @@ app.MapPost("/api/timelock/decrypt", async (TimelockDecryptionRequest request, I
     }
 })
 .WithName("TimelockDecrypt")
-.WithOpenApi()
 .RequireAuthorization();
 
 // Darknet Backup Endpoints
@@ -264,7 +260,6 @@ app.MapPost("/api/darknet/backup", async (DarknetBackupRequest request, IDarknet
     }
 })
 .WithName("DarknetBackup")
-.WithOpenApi()
 .RequireAuthorization();
 
 app.MapPost("/api/darknet/restore", async (DarknetRestoreRequest request, IDarknetBackupService darknetService) =>
@@ -290,7 +285,6 @@ app.MapPost("/api/darknet/restore", async (DarknetRestoreRequest request, IDarkn
     }
 })
 .WithName("DarknetRestore")
-.WithOpenApi()
 .RequireAuthorization();
 
 app.MapGet("/api/darknet/status/{contentHash}", async (string contentHash, IDarknetBackupService darknetService) =>
@@ -307,7 +301,6 @@ app.MapGet("/api/darknet/status/{contentHash}", async (string contentHash, IDark
     }
 })
 .WithName("DarknetStatus")
-.WithOpenApi()
 .RequireAuthorization();
 
 app.MapGet("/api/darknet/nodes", async (IDarknetBackupService darknetService) =>
@@ -324,7 +317,6 @@ app.MapGet("/api/darknet/nodes", async (IDarknetBackupService darknetService) =>
     }
 })
 .WithName("DarknetNodes")
-.WithOpenApi()
 .RequireAuthorization();
 
 // Geo-Fencing Endpoints
@@ -332,7 +324,7 @@ app.MapPost("/api/geo-fencing/validate", async (GeoFencingValidationRequest requ
 {
     try
     {
-        var userLocation = new GeoLocation
+        var userLocation = new HardLock.Security.Encryption.GeoLocation
         {
             Latitude = request.Latitude,
             Longitude = request.Longitude,
@@ -345,58 +337,28 @@ app.MapPost("/api/geo-fencing/validate", async (GeoFencingValidationRequest requ
             AllowedCountries = request.AllowedCountries,
             AllowedCities = request.AllowedCities,
             AllowedLocations = request.AllowedLocations,
-            AllowedPolygons = request.AllowedPolygons
+            AllowedPolygons = request.AllowedPolygons?.Select(polygon => 
+                polygon.Select(loc => new HardLock.Security.Encryption.GeoLocation 
+                { 
+                    Latitude = loc.Latitude, 
+                    Longitude = loc.Longitude 
+                }).ToList()).ToList()
         };
 
-        var result = await geoFencingService.ValidateAccessAsync(userLocation, rules);
-        return Results.Ok(result);
+        var isValid = await geoFencingService.ValidateAccessAsync(userLocation, rules);
+        return Results.Ok(new { IsValid = isValid.IsAllowed });
     }
     catch (Exception ex)
     {
-        Log.Error(ex, "Error validating geo-fencing");
+        Log.Error(ex, "Error during geo-fencing validation");
         return Results.BadRequest(new { Error = "Geo-fencing validation failed", Details = ex.Message });
     }
 })
 .WithName("GeoFencingValidate")
-.WithOpenApi()
-.RequireAuthorization();
-
-app.MapGet("/api/geo-fencing/location/{ipAddress}", async (string ipAddress, IGeoFencingService geoFencingService) =>
-{
-    try
-    {
-        var location = await geoFencingService.GetLocationFromIPAsync(ipAddress);
-        return Results.Ok(location);
-    }
-    catch (Exception ex)
-    {
-        Log.Error(ex, "Error getting location from IP");
-        return Results.BadRequest(new { Error = "Failed to get location", Details = ex.Message });
-    }
-})
-.WithName("GeoFencingLocation")
-.WithOpenApi()
-.RequireAuthorization();
-
-app.MapGet("/api/geo-fencing/regions", async (IGeoFencingService geoFencingService) =>
-{
-    try
-    {
-        var regions = await geoFencingService.GetAvailableRegionsAsync();
-        return Results.Ok(regions);
-    }
-    catch (Exception ex)
-    {
-        Log.Error(ex, "Error getting available regions");
-        return Results.BadRequest(new { Error = "Failed to get regions", Details = ex.Message });
-    }
-})
-.WithName("GeoFencingRegions")
-.WithOpenApi()
 .RequireAuthorization();
 
 // File Hashing Endpoints
-app.MapPost("/api/hash/file", async (FileHashRequest request, IFileHashingService hashingService) =>
+app.MapPost("/api/hash/file", async (FileHashRequest request, IFileHashingService fileHashingService) =>
 {
     try
     {
@@ -406,20 +368,16 @@ app.MapPost("/api/hash/file", async (FileHashRequest request, IFileHashingServic
         {
             if (request.IsLargeFile)
             {
-                result = await hashingService.HashLargeFileAsync(request.FilePath, 
-                    ParseHashAlgorithm(request.HashAlgorithm), 
-                    request.BufferSize ?? 8192);
+                result = await fileHashingService.HashLargeFileAsync(request.FilePath, ParseHashAlgorithm(request.HashAlgorithm), request.BufferSize ?? 8192);
             }
             else
             {
-                result = await hashingService.HashFileAsync(request.FilePath, 
-                    ParseHashAlgorithm(request.HashAlgorithm));
+                result = await fileHashingService.HashFileAsync(request.FilePath, ParseHashAlgorithm(request.HashAlgorithm));
             }
         }
-        else if (request.FileData != null && request.FileData.Length > 0)
+        else if (request.FileData != null)
         {
-            result = await hashingService.HashFileAsync(request.FileData, 
-                ParseHashAlgorithm(request.HashAlgorithm));
+            result = await fileHashingService.HashFileAsync(request.FileData, ParseHashAlgorithm(request.HashAlgorithm));
         }
         else
         {
@@ -447,83 +405,9 @@ app.MapPost("/api/hash/file", async (FileHashRequest request, IFileHashingServic
     }
 })
 .WithName("HashFile")
-.WithOpenApi()
 .RequireAuthorization();
 
-app.MapPost("/api/hash/verify", async (FileIntegrityRequest request, IFileHashingService hashingService) =>
-{
-    try
-    {
-        var isValid = await hashingService.VerifyFileHashAsync(
-            request.FilePath, 
-            request.ExpectedHash, 
-            ParseHashAlgorithm(request.HashAlgorithm));
-
-        var response = new FileIntegrityResponse
-        {
-            IsValid = isValid,
-            Reason = isValid ? "Hash verification successful" : "Hash verification failed",
-            FilePath = request.FilePath,
-            ExpectedHash = request.ExpectedHash,
-            VerificationTime = DateTime.UtcNow
-        };
-
-        return Results.Ok(response);
-    }
-    catch (Exception ex)
-    {
-        Log.Error(ex, "Error during file hash verification");
-        return Results.BadRequest(new { Error = "File hash verification failed", Details = ex.Message });
-    }
-})
-.WithName("VerifyFileHash")
-.WithOpenApi()
-.RequireAuthorization();
-
-app.MapPost("/api/hash/integrity", async (CreateIntegrityInfoRequest request, IFileHashingService hashingService) =>
-{
-    try
-    {
-        FileIntegrityInfo integrityInfo;
-        
-        if (!string.IsNullOrEmpty(request.FilePath))
-        {
-            integrityInfo = await hashingService.CreateIntegrityInfoAsync(request.FilePath, 
-                ParseHashAlgorithm(request.HashAlgorithm));
-        }
-        else if (request.FileData != null && request.FileData.Length > 0)
-        {
-            integrityInfo = await hashingService.CreateIntegrityInfoAsync(request.FileData, 
-                ParseHashAlgorithm(request.HashAlgorithm));
-        }
-        else
-        {
-            return Results.BadRequest(new { Error = "Either FilePath or FileData must be provided" });
-        }
-
-        var response = new IntegrityInfoResponse
-        {
-            Hash = integrityInfo.Hash,
-            Algorithm = integrityInfo.Algorithm.ToString(),
-            FilePath = integrityInfo.FilePath,
-            FileSize = integrityInfo.FileSize,
-            CreatedAt = integrityInfo.CreatedAt ?? DateTime.UtcNow,
-            Metadata = integrityInfo.Metadata
-        };
-
-        return Results.Ok(response);
-    }
-    catch (Exception ex)
-    {
-        Log.Error(ex, "Error creating integrity info");
-        return Results.BadRequest(new { Error = "Failed to create integrity info", Details = ex.Message });
-    }
-})
-.WithName("CreateIntegrityInfo")
-.WithOpenApi()
-.RequireAuthorization();
-
-app.MapPost("/api/hash/verify-integrity", async (FileIntegrityRequest request, IFileHashingService hashingService) =>
+app.MapPost("/api/hash/verify", async (FileIntegrityRequest request, IFileHashingService fileHashingService) =>
 {
     try
     {
@@ -534,22 +418,8 @@ app.MapPost("/api/hash/verify-integrity", async (FileIntegrityRequest request, I
             FilePath = request.FilePath
         };
 
-        var result = await hashingService.VerifyFileIntegrityAsync(request.FilePath, integrityInfo);
-
-        var response = new FileIntegrityResponse
-        {
-            IsValid = result.IsValid,
-            Reason = result.Reason,
-            FilePath = result.FilePath,
-            ExpectedHash = result.ExpectedHash,
-            ActualHash = result.ActualHash,
-            ExpectedSize = result.ExpectedSize,
-            ActualSize = result.ActualSize,
-            VerificationTime = result.VerificationTime,
-            ErrorMessage = result.ErrorMessage
-        };
-
-        return Results.Ok(response);
+        var result = await fileHashingService.VerifyFileIntegrityAsync(request.FilePath, integrityInfo);
+        return Results.Ok(result);
     }
     catch (Exception ex)
     {
@@ -558,7 +428,69 @@ app.MapPost("/api/hash/verify-integrity", async (FileIntegrityRequest request, I
     }
 })
 .WithName("VerifyFileIntegrity")
-.WithOpenApi()
+.RequireAuthorization();
+
+app.MapPost("/api/hash/create-info", async (CreateIntegrityInfoRequest request, IFileHashingService fileHashingService) =>
+{
+    try
+    {
+        FileIntegrityInfo result;
+        
+        if (!string.IsNullOrEmpty(request.FilePath))
+        {
+            result = await fileHashingService.CreateIntegrityInfoAsync(request.FilePath, ParseHashAlgorithm(request.HashAlgorithm));
+        }
+        else if (request.FileData != null)
+        {
+            result = await fileHashingService.CreateIntegrityInfoAsync(request.FileData, ParseHashAlgorithm(request.HashAlgorithm));
+        }
+        else
+        {
+            return Results.BadRequest(new { Error = "Either FilePath or FileData must be provided" });
+        }
+
+        var response = new IntegrityInfoResponse
+        {
+            Hash = result.Hash,
+            Algorithm = result.Algorithm.ToString(),
+            FilePath = result.FilePath,
+            FileSize = result.FileSize,
+            CreatedAt = result.CreatedAt.GetValueOrDefault(DateTime.UtcNow),
+            Metadata = result.Metadata
+        };
+
+        return Results.Ok(response);
+    }
+    catch (Exception ex)
+    {
+        Log.Error(ex, "Error creating integrity info");
+        return Results.BadRequest(new { Error = "Creating integrity info failed", Details = ex.Message });
+    }
+})
+.WithName("CreateIntegrityInfo")
+.RequireAuthorization();
+
+app.MapPost("/api/hash/verify-info", async (FileIntegrityRequest request, IFileHashingService fileHashingService) =>
+{
+    try
+    {
+        var integrityInfo = new FileIntegrityInfo
+        {
+            Hash = request.ExpectedHash,
+            Algorithm = ParseHashAlgorithm(request.HashAlgorithm),
+            FilePath = request.FilePath
+        };
+
+        var result = await fileHashingService.VerifyFileIntegrityAsync(request.FilePath, integrityInfo);
+        return Results.Ok(result);
+    }
+    catch (Exception ex)
+    {
+        Log.Error(ex, "Error during integrity info verification");
+        return Results.BadRequest(new { Error = "Integrity info verification failed", Details = ex.Message });
+    }
+})
+.WithName("VerifyIntegrityInfo")
 .RequireAuthorization();
 
 // Helper method to parse hash algorithm

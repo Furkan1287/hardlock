@@ -60,13 +60,13 @@ public class FileHashingService : IFileHashingService
         {
             _logger.LogInformation("Hashing file: {FilePath} with {Algorithm}", filePath, algorithm);
 
-            if (!File.Exists(filePath))
+            if (!System.IO.File.Exists(filePath))
             {
                 throw new FileNotFoundException($"File not found: {filePath}");
             }
 
             var fileInfo = new FileInfo(filePath);
-            var fileData = await File.ReadAllBytesAsync(filePath);
+            var fileData = await System.IO.File.ReadAllBytesAsync(filePath);
             
             var hash = await ComputeHashAsync(fileData, algorithm);
             var result = new FileHashResult
@@ -100,7 +100,7 @@ public class FileHashingService : IFileHashingService
         {
             _logger.LogInformation("Hashing large file: {FilePath} with {Algorithm}", filePath, algorithm);
 
-            if (!File.Exists(filePath))
+            if (!System.IO.File.Exists(filePath))
             {
                 throw new FileNotFoundException($"File not found: {filePath}");
             }
@@ -159,7 +159,7 @@ public class FileHashingService : IFileHashingService
         {
             _logger.LogInformation("Verifying file hash: {FilePath} with {Algorithm}", filePath, algorithm);
 
-            if (!File.Exists(filePath))
+            if (!System.IO.File.Exists(filePath))
             {
                 _logger.LogWarning("File not found: {FilePath}", filePath);
                 return false;
@@ -184,7 +184,7 @@ public class FileHashingService : IFileHashingService
         {
             _logger.LogInformation("Verifying file integrity: {FilePath}", filePath);
 
-            if (!File.Exists(filePath))
+            if (!System.IO.File.Exists(filePath))
             {
                 return new FileIntegrityResult
                 {
@@ -277,7 +277,7 @@ public class FileHashingService : IFileHashingService
     {
         try
         {
-            if (!File.Exists(filePath))
+            if (!System.IO.File.Exists(filePath))
             {
                 throw new FileNotFoundException($"File not found: {filePath}");
             }
@@ -311,7 +311,7 @@ public class FileHashingService : IFileHashingService
     private async Task<string> ComputeHashStreamAsync(string filePath, HashAlgorithm algorithm, int bufferSize = 8192)
     {
         using var hashAlgorithm = GetHashAlgorithm(algorithm);
-        using var fileStream = File.OpenRead(filePath);
+        using var fileStream = System.IO.File.OpenRead(filePath);
         
         var buffer = new byte[bufferSize];
         int bytesRead;

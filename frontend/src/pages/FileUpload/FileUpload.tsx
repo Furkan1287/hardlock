@@ -1,9 +1,19 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useContext } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { Upload, Lock, Shield, File, X, CheckCircle } from 'lucide-react';
+import { AuthContext } from '../../contexts/AuthContext.tsx';
+
+interface UploadedFile {
+  id: string;
+  name: string;
+  size: number;
+  progress: number;
+  status: 'uploading' | 'completed' | 'error';
+  error?: string;
+}
 
 const FileUpload: React.FC = () => {
-  const [uploadedFiles, setUploadedFiles] = useState<File[]>([]);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [uploadProgress, setUploadProgress] = useState<{ [key: string]: number }>({});
   const [encryptionLevel, setEncryptionLevel] = useState<'standard' | 'military' | 'quantum'>('standard');
   const [enableTimelock, setEnableTimelock] = useState(false);
@@ -17,25 +27,11 @@ const FileUpload: React.FC = () => {
   const [radiusCenter, setRadiusCenter] = useState({ lat: '', lng: '', radius: '1000' });
   const [enableHashVerification, setEnableHashVerification] = useState(true);
   const [hashAlgorithm, setHashAlgorithm] = useState('SHA256');
+  const [isDragOver, setIsDragOver] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   const onDrop = useCallback((acceptedFiles: File[]) => {
-    setUploadedFiles(prev => [...prev, ...acceptedFiles]);
-    
-    // Simulate upload progress
-    acceptedFiles.forEach(file => {
-      setUploadProgress(prev => ({ ...prev, [file.name]: 0 }));
-      
-      const interval = setInterval(() => {
-        setUploadProgress(prev => {
-          const current = prev[file.name] || 0;
-          if (current >= 100) {
-            clearInterval(interval);
-            return prev;
-          }
-          return { ...prev, [file.name]: current + 10 };
-        });
-      }, 200);
-    });
+    handleFiles(acceptedFiles);
   }, []);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
@@ -56,21 +52,24 @@ const FileUpload: React.FC = () => {
     maxSize: 100 * 1024 * 1024, // 100MB
   });
 
-  const removeFile = (fileName: string) => {
-    setUploadedFiles(prev => prev.filter(file => file.name !== fileName));
+  const removeFile = (fileId: string) => {
+    setUploadedFiles(prev => prev.filter(f => f.id !== fileId));
     setUploadProgress(prev => {
       const newProgress = { ...prev };
-      delete newProgress[fileName];
+      Object.keys(newProgress).forEach(key => {
+        if (key.startsWith(fileId)) {
+          delete newProgress[key];
+        }
+      });
       return newProgress;
     });
   };
 
-  const formatFileSize = (bytes: number) => {
+  const formatFileSize = (bytes: number): string => {
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
     if (bytes === 0) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
   };
 
   const getEncryptionInfo = (level: string) => {
@@ -88,442 +87,347 @@ const FileUpload: React.FC = () => {
 
   const encryptionInfo = getEncryptionInfo(encryptionLevel);
 
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  }, []);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    
+    const files = Array.from(e.dataTransfer.files);
+    handleFiles(files);
+  }, []);
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || []);
+    handleFiles(files);
+  };
+
+  const handleFiles = (files: File[]) => {
+    setIsUploading(true);
+    
+    files.forEach((file, index) => {
+      const fileId = `file-${Date.now()}-${index}`;
+      const uploadedFile: UploadedFile = {
+        id: fileId,
+        name: file.name,
+        size: file.size,
+        progress: 0,
+        status: 'uploading'
+      };
+
+      setUploadedFiles(prev => [...prev, uploadedFile]);
+
+      // Simulate file upload progress
+      const interval = setInterval(() => {
+        setUploadedFiles(prev => prev.map(f => {
+          if (f.id === fileId) {
+            const newProgress = Math.min(f.progress + Math.random() * 20, 100);
+            const newStatus = newProgress === 100 ? 'completed' : 'uploading';
+            return { ...f, progress: newProgress, status: newStatus };
+          }
+          return f;
+        }));
+      }, 200);
+
+      // Complete upload after 3-5 seconds
+      setTimeout(() => {
+        clearInterval(interval);
+        setUploadedFiles(prev => prev.map(f => {
+          if (f.id === fileId && f.status === 'uploading') {
+            return { ...f, progress: 100, status: 'completed' };
+          }
+          return f;
+        }));
+        
+        // Check if all uploads are complete
+        setTimeout(() => {
+          const allCompleted = uploadedFiles.every(f => f.status === 'completed');
+          if (allCompleted) {
+            setIsUploading(false);
+          }
+        }, 1000);
+      }, 3000 + Math.random() * 2000);
+    });
+  };
+
+  const retryUpload = (fileId: string) => {
+    setUploadedFiles(prev => prev.map(f => {
+      if (f.id === fileId) {
+        return { ...f, progress: 0, status: 'uploading', error: undefined };
+      }
+      return f;
+    }));
+    
+    // Simulate retry
+    setTimeout(() => {
+      setUploadedFiles(prev => prev.map(f => {
+        if (f.id === fileId) {
+          return { ...f, progress: 100, status: 'completed' };
+        }
+        return f;
+      }));
+    }, 2000);
+  };
+
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-white">Upload Files</h1>
-        <p className="text-dark-400 mt-1">Securely upload and encrypt your files</p>
-      </div>
-
-      {/* Encryption Level Selection */}
-      <div className="card p-6">
-        <h3 className="text-lg font-medium text-white mb-4">Encryption Level</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <button
-            onClick={() => setEncryptionLevel('standard')}
-            className={`p-4 border rounded-lg text-left transition-colors duration-200 ${
-              encryptionLevel === 'standard'
-                ? 'border-primary-500 bg-primary-50 bg-opacity-10'
-                : 'border-dark-600 hover:border-dark-500'
-            }`}
-          >
-            <div className="flex items-center space-x-3">
-              <Lock className="h-6 w-6 text-primary-500" />
-              <div>
-                <h4 className="font-medium text-white">Standard</h4>
-                <p className="text-sm text-dark-400">AES-256-GCM</p>
-              </div>
-            </div>
-          </button>
-
-          <button
-            onClick={() => setEncryptionLevel('military')}
-            className={`p-4 border rounded-lg text-left transition-colors duration-200 ${
-              encryptionLevel === 'military'
-                ? 'border-primary-500 bg-primary-50 bg-opacity-10'
-                : 'border-dark-600 hover:border-dark-500'
-            }`}
-          >
-            <div className="flex items-center space-x-3">
-              <Shield className="h-6 w-6 text-warning-500" />
-              <div>
-                <h4 className="font-medium text-white">Military</h4>
-                <p className="text-sm text-dark-400">AES-256 + Sharding</p>
-              </div>
-            </div>
-          </button>
-
-          <button
-            onClick={() => setEncryptionLevel('quantum')}
-            className={`p-4 border rounded-lg text-left transition-colors duration-200 ${
-              encryptionLevel === 'quantum'
-                ? 'border-primary-500 bg-primary-50 bg-opacity-10'
-                : 'border-dark-600 hover:border-dark-500'
-            }`}
-          >
-            <div className="flex items-center space-x-3">
-              <Shield className="h-6 w-6 text-success-500" />
-              <div>
-                <h4 className="font-medium text-white">Quantum</h4>
-                <p className="text-sm text-dark-400">Post-Quantum + AES</p>
-              </div>
-            </div>
-          </button>
-        </div>
-        <div className="mt-4 p-3 bg-dark-800 rounded-lg">
-          <p className="text-sm text-white">
-            <strong>Selected:</strong> {encryptionInfo.name} - {encryptionInfo.description}
-          </p>
-        </div>
-      </div>
-
-      {/* Timelock Settings */}
-      <div className="card p-6">
-        <div className="flex items-center space-x-3 mb-4">
-          <input
-            type="checkbox"
-            id="enableTimelock"
-            checked={enableTimelock}
-            onChange={(e) => setEnableTimelock(e.target.checked)}
-            className="w-4 h-4 text-primary-600 bg-dark-700 border-dark-600 rounded focus:ring-primary-500"
-          />
-          <label htmlFor="enableTimelock" className="text-lg font-medium text-white">
-            Enable Time Lock Decryption
-          </label>
-        </div>
-        
-        {enableTimelock && (
-          <div className="space-y-4">
+    <div className="min-h-screen bg-gray-900 p-6">
+      <div className="max-w-4xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700 p-6">
+          <div className="flex items-center justify-between">
             <div>
-              <label className="block text-sm font-medium text-white mb-2">Timelock Type</label>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setTimelockType('timestamp')}
-                  className={`p-3 border rounded-lg text-left transition-colors duration-200 ${
-                    timelockType === 'timestamp'
-                      ? 'border-primary-500 bg-primary-50 bg-opacity-10'
-                      : 'border-dark-600 hover:border-dark-500'
-                  }`}
-                >
-                  <div className="text-sm">
-                    <div className="font-medium text-white">Timestamp</div>
-                    <div className="text-dark-400">Unlock at specific date/time</div>
-                  </div>
-                </button>
-                
-                <button
-                  type="button"
-                  onClick={() => setTimelockType('block')}
-                  className={`p-3 border rounded-lg text-left transition-colors duration-200 ${
-                    timelockType === 'block'
-                      ? 'border-primary-500 bg-primary-50 bg-opacity-10'
-                      : 'border-dark-600 hover:border-dark-500'
-                  }`}
-                >
-                  <div className="text-sm">
-                    <div className="font-medium text-white">Block Number</div>
-                    <div className="text-dark-400">Unlock at Ethereum block</div>
-                  </div>
-                </button>
-                
-                <button
-                  type="button"
-                  onClick={() => setTimelockType('hybrid')}
-                  className={`p-3 border rounded-lg text-left transition-colors duration-200 ${
-                    timelockType === 'hybrid'
-                      ? 'border-primary-500 bg-primary-50 bg-opacity-10'
-                      : 'border-dark-600 hover:border-dark-500'
-                  }`}
-                >
-                  <div className="text-sm">
-                    <div className="font-medium text-white">Hybrid</div>
-                    <div className="text-dark-400">Both timestamp and block</div>
-                  </div>
-                </button>
-              </div>
+              <h1 className="text-3xl font-bold text-white mb-2">File Upload</h1>
+              <p className="text-gray-400">
+                Upload and encrypt your files securely
+              </p>
             </div>
+            <div className="bg-gradient-to-r from-red-600 to-red-800 p-3 rounded-xl">
+              <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+            </div>
+          </div>
+        </div>
 
-            {(timelockType === 'timestamp' || timelockType === 'hybrid') && (
-              <div>
-                <label htmlFor="unlockAt" className="block text-sm font-medium text-white mb-2">
-                  Unlock Date & Time
-                </label>
-                <input
-                  type="datetime-local"
-                  id="unlockAt"
-                  value={unlockAt}
-                  onChange={(e) => setUnlockAt(e.target.value)}
-                  className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  min={new Date().toISOString().slice(0, 16)}
-                />
+        {/* Upload Area */}
+        <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700 p-8">
+          <div
+            className={`border-2 border-dashed rounded-2xl p-12 text-center transition-all duration-300 ${
+              isDragOver
+                ? 'border-red-500 bg-red-500/10'
+                : 'border-gray-600 hover:border-red-500/50'
+            }`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+          >
+            <div className="space-y-4">
+              <div className="mx-auto w-16 h-16 bg-gradient-to-r from-red-600 to-red-800 rounded-full flex items-center justify-center">
+                <svg className="h-8 w-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
               </div>
-            )}
-
-            {(timelockType === 'block' || timelockType === 'hybrid') && (
+              
               <div>
-                <label htmlFor="blockNumber" className="block text-sm font-medium text-white mb-2">
-                  Ethereum Block Number
-                </label>
-                <input
-                  type="number"
-                  id="blockNumber"
-                  value={blockNumber}
-                  onChange={(e) => setBlockNumber(e.target.value)}
-                  placeholder="e.g., 20000000"
-                  className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  min="0"
-                />
-                <p className="text-xs text-dark-400 mt-1">
-                  Current block: ~{Math.floor(Date.now() / 12000)} (estimated)
+                <h3 className="text-xl font-bold text-white mb-2">
+                  {isDragOver ? 'Drop files here' : 'Upload your files'}
+                </h3>
+                <p className="text-gray-400 mb-6">
+                  Drag and drop files here, or click to browse
                 </p>
+                
+                <label className="bg-gradient-to-r from-red-600 to-red-800 text-white px-6 py-3 rounded-lg font-medium hover:from-red-700 hover:to-red-900 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 focus:ring-offset-gray-800 transition-all duration-200 transform hover:scale-105 cursor-pointer inline-block">
+                  <svg className="h-5 w-5 inline mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                  Choose Files
+                  <input
+                    type="file"
+                    multiple
+                    onChange={handleFileSelect}
+                    className="hidden"
+                    accept="*/*"
+                  />
+                </label>
               </div>
-            )}
-
-            <div className="p-3 bg-warning-900 bg-opacity-20 border border-warning-700 rounded-lg">
-              <p className="text-sm text-warning-300">
-                <strong>⚠️ Important:</strong> Files with timelock cannot be decrypted until the specified time/block is reached. 
-                Make sure to save the timelock private key securely.
+              
+              <p className="text-gray-500 text-sm">
+                Maximum file size: 100MB • Supported formats: All
               </p>
             </div>
           </div>
-        )}
-      </div>
-
-      {/* Geo-Fencing Settings */}
-      <div className="card p-6">
-        <div className="flex items-center space-x-3 mb-4">
-          <input
-            type="checkbox"
-            id="enableGeoFencing"
-            checked={enableGeoFencing}
-            onChange={(e) => setEnableGeoFencing(e.target.checked)}
-            className="w-4 h-4 text-primary-600 bg-dark-700 border-dark-600 rounded focus:ring-primary-500"
-          />
-          <label htmlFor="enableGeoFencing" className="text-lg font-medium text-white">
-            Enable Geographic Locking
-          </label>
         </div>
-        
-        {enableGeoFencing && (
-          <div className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-white mb-2">Geo-Fencing Type</label>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setGeoFencingType('country')}
-                  className={`p-3 border rounded-lg text-left transition-colors duration-200 ${
-                    geoFencingType === 'country'
-                      ? 'border-primary-500 bg-primary-50 bg-opacity-10'
-                      : 'border-dark-600 hover:border-dark-500'
-                  }`}
-                >
-                  <div className="text-sm">
-                    <div className="font-medium text-white">Country</div>
-                    <div className="text-dark-400">Restrict by country</div>
-                  </div>
-                </button>
-                
-                <button
-                  type="button"
-                  onClick={() => setGeoFencingType('city')}
-                  className={`p-3 border rounded-lg text-left transition-colors duration-200 ${
-                    geoFencingType === 'city'
-                      ? 'border-primary-500 bg-primary-50 bg-opacity-10'
-                      : 'border-dark-600 hover:border-dark-500'
-                  }`}
-                >
-                  <div className="text-sm">
-                    <div className="font-medium text-white">City</div>
-                    <div className="text-dark-400">Restrict by city</div>
-                  </div>
-                </button>
-                
-                <button
-                  type="button"
-                  onClick={() => setGeoFencingType('radius')}
-                  className={`p-3 border rounded-lg text-left transition-colors duration-200 ${
-                    geoFencingType === 'radius'
-                      ? 'border-primary-500 bg-primary-50 bg-opacity-10'
-                      : 'border-dark-600 hover:border-dark-500'
-                  }`}
-                >
-                  <div className="text-sm">
-                    <div className="font-medium text-white">Radius</div>
-                    <div className="text-dark-400">Restrict by distance</div>
-                  </div>
-                </button>
-                
-                <button
-                  type="button"
-                  onClick={() => setGeoFencingType('polygon')}
-                  className={`p-3 border rounded-lg text-left transition-colors duration-200 ${
-                    geoFencingType === 'polygon'
-                      ? 'border-primary-500 bg-primary-50 bg-opacity-10'
-                      : 'border-dark-600 hover:border-dark-500'
-                  }`}
-                >
-                  <div className="text-sm">
-                    <div className="font-medium text-white">Polygon</div>
-                    <div className="text-dark-400">Custom region</div>
-                  </div>
-                </button>
-              </div>
+
+        {/* Upload Options */}
+        <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700 p-6">
+          <h2 className="text-xl font-bold text-white mb-4">Upload Options</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="flex items-center space-x-3 p-4 bg-gray-700/30 rounded-lg border border-gray-600">
+              <input
+                type="checkbox"
+                id="encrypt"
+                defaultChecked
+                className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-600 rounded bg-gray-700"
+              />
+              <label htmlFor="encrypt" className="text-white font-medium">
+                Encrypt files
+              </label>
             </div>
-
-            {geoFencingType === 'country' && (
-              <div>
-                <label className="block text-sm font-medium text-white mb-2">Allowed Countries</label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {['Turkey', 'Germany', 'USA', 'UK', 'France', 'Italy', 'Spain', 'Netherlands'].map(country => (
-                    <label key={country} className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={selectedCountries.includes(country)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedCountries([...selectedCountries, country]);
-                          } else {
-                            setSelectedCountries(selectedCountries.filter(c => c !== country));
-                          }
-                        }}
-                        className="w-4 h-4 text-primary-600 bg-dark-700 border-dark-600 rounded"
-                      />
-                      <span className="text-sm text-white">{country}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {geoFencingType === 'city' && (
-              <div>
-                <label className="block text-sm font-medium text-white mb-2">Allowed Cities</label>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-                  {['Istanbul', 'Ankara', 'Izmir', 'Bursa', 'Antalya', 'Adana', 'Konya', 'Gaziantep'].map(city => (
-                    <label key={city} className="flex items-center space-x-2">
-                      <input
-                        type="checkbox"
-                        checked={selectedCities.includes(city)}
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedCities([...selectedCities, city]);
-                          } else {
-                            setSelectedCities(selectedCities.filter(c => c !== city));
-                          }
-                        }}
-                        className="w-4 h-4 text-primary-600 bg-dark-700 border-dark-600 rounded"
-                      />
-                      <span className="text-sm text-white">{city}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {geoFencingType === 'radius' && (
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-white mb-2">Latitude</label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={radiusCenter.lat}
-                    onChange={(e) => setRadiusCenter({...radiusCenter, lat: e.target.value})}
-                    placeholder="41.0082"
-                    className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-white mb-2">Longitude</label>
-                  <input
-                    type="number"
-                    step="any"
-                    value={radiusCenter.lng}
-                    onChange={(e) => setRadiusCenter({...radiusCenter, lng: e.target.value})}
-                    placeholder="28.9784"
-                    className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-white mb-2">Radius (meters)</label>
-                  <input
-                    type="number"
-                    value={radiusCenter.radius}
-                    onChange={(e) => setRadiusCenter({...radiusCenter, radius: e.target.value})}
-                    className="w-full px-3 py-2 bg-dark-700 border border-dark-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-primary-500"
-                  />
-                </div>
-              </div>
-            )}
-
-            <div className="p-3 bg-info-900 bg-opacity-20 border border-info-700 rounded-lg">
-              <p className="text-sm text-info-300">
-                <strong>📍 Location Lock:</strong> Files will only be accessible from the specified geographic locations. 
-                Users outside these areas will be denied access.
-              </p>
+            
+            <div className="flex items-center space-x-3 p-4 bg-gray-700/30 rounded-lg border border-gray-600">
+              <input
+                type="checkbox"
+                id="compress"
+                className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-600 rounded bg-gray-700"
+              />
+              <label htmlFor="compress" className="text-white font-medium">
+                Compress files
+              </label>
+            </div>
+            
+            <div className="flex items-center space-x-3 p-4 bg-gray-700/30 rounded-lg border border-gray-600">
+              <input
+                type="checkbox"
+                id="backup"
+                defaultChecked
+                className="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-600 rounded bg-gray-700"
+              />
+              <label htmlFor="backup" className="text-white font-medium">
+                Create backup
+              </label>
             </div>
           </div>
-        )}
-      </div>
-
-      {/* Upload Zone */}
-      <div className="card p-6">
-        <div
-          {...getRootProps()}
-          className={`upload-zone ${isDragActive ? 'dragover' : ''}`}
-        >
-          <input {...getInputProps()} />
-          <Upload className="mx-auto h-12 w-12 text-dark-400 mb-4" />
-          {isDragActive ? (
-            <p className="text-lg text-white">Drop the files here...</p>
-          ) : (
-            <div>
-              <p className="text-lg text-white mb-2">Drag & drop files here, or click to select</p>
-              <p className="text-sm text-dark-400">
-                Supports PDF, DOC, XLS, PPT, images, videos, and more (max 100MB per file)
-              </p>
-            </div>
-          )}
         </div>
-      </div>
 
-      {/* Uploaded Files */}
-      {uploadedFiles.length > 0 && (
-        <div className="card">
-          <div className="p-6 border-b border-dark-700">
-            <h3 className="text-lg font-medium text-white">Uploading Files</h3>
-          </div>
-          <div className="p-6">
+        {/* Upload Progress */}
+        {uploadedFiles.length > 0 && (
+          <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700 p-6">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-xl font-bold text-white">Upload Progress</h2>
+              <div className="flex items-center space-x-2">
+                <span className="text-gray-400 text-sm">
+                  {uploadedFiles.filter(f => f.status === 'completed').length} of {uploadedFiles.length} completed
+                </span>
+                {isUploading && (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-500"></div>
+                )}
+              </div>
+            </div>
+            
             <div className="space-y-4">
               {uploadedFiles.map((file) => (
-                <div key={file.name} className="flex items-center space-x-4 p-4 bg-dark-800 rounded-lg">
-                  <File className="h-8 w-8 text-primary-500" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium text-white truncate">{file.name}</p>
-                    <p className="text-xs text-dark-400">{formatFileSize(file.size)}</p>
-                  </div>
-                  <div className="flex items-center space-x-4">
-                    <div className="flex-1 w-32">
-                      <div className="w-full bg-dark-700 rounded-full h-2">
-                        <div
-                          className="bg-primary-600 h-2 rounded-full transition-all duration-300"
-                          style={{ width: `${uploadProgress[file.name] || 0}%` }}
-                        />
+                <div
+                  key={file.id}
+                  className="p-4 bg-gray-700/30 rounded-lg border border-gray-600"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center space-x-3">
+                      <div className={`p-2 rounded-lg ${
+                        file.status === 'completed' ? 'bg-green-500/20' :
+                        file.status === 'error' ? 'bg-red-500/20' :
+                        'bg-blue-500/20'
+                      }`}>
+                        <svg className={`h-5 w-5 ${
+                          file.status === 'completed' ? 'text-green-400' :
+                          file.status === 'error' ? 'text-red-400' :
+                          'text-blue-400'
+                        }`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
                       </div>
-                      <p className="text-xs text-dark-400 mt-1">
-                        {uploadProgress[file.name] || 0}%
-                      </p>
+                      <div>
+                        <p className="text-white font-medium">{file.name}</p>
+                        <p className="text-gray-400 text-sm">{formatFileSize(file.size)}</p>
+                      </div>
                     </div>
-                    {uploadProgress[file.name] === 100 ? (
-                      <CheckCircle className="h-5 w-5 text-success-500" />
-                    ) : (
+                    
+                    <div className="flex items-center space-x-2">
+                      {file.status === 'error' && (
+                        <button
+                          onClick={() => retryUpload(file.id)}
+                          className="px-3 py-1 bg-blue-600 text-white rounded-lg text-xs hover:bg-blue-700 transition-colors duration-200"
+                        >
+                          Retry
+                        </button>
+                      )}
                       <button
-                        onClick={() => removeFile(file.name)}
-                        className="text-dark-400 hover:text-danger-500"
+                        onClick={() => removeFile(file.id)}
+                        className="text-red-400 hover:text-red-300 transition-colors duration-200"
                       >
-                        <X className="h-5 w-5" />
+                        <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
                       </button>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-400">Progress</span>
+                      <span className="text-white">{Math.round(file.progress)}%</span>
+                    </div>
+                    <div className="w-full bg-gray-600 rounded-full h-2">
+                      <div
+                        className={`h-2 rounded-full transition-all duration-300 ${
+                          file.status === 'completed' ? 'bg-green-500' :
+                          file.status === 'error' ? 'bg-red-500' :
+                          'bg-blue-500'
+                        }`}
+                        style={{ width: `${file.progress}%` }}
+                      ></div>
+                    </div>
+                    {file.status === 'error' && file.error && (
+                      <p className="text-red-400 text-sm">{file.error}</p>
                     )}
                   </div>
                 </div>
               ))}
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Upload Button */}
-      {uploadedFiles.length > 0 && (
-        <div className="flex justify-end">
-          <button className="btn-primary">
-            <Lock className="h-4 w-4 mr-2" />
-            Encrypt & Upload {uploadedFiles.length} File{uploadedFiles.length !== 1 ? 's' : ''}
-          </button>
+        {/* Upload Tips */}
+        <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl border border-gray-700 p-6">
+          <h2 className="text-xl font-bold text-white mb-4">Upload Tips</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="flex items-start space-x-3">
+              <div className="bg-blue-500/20 p-2 rounded-lg">
+                <svg className="h-5 w-5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-white font-medium">File Size</h3>
+                <p className="text-gray-400 text-sm">Keep files under 100MB for faster uploads</p>
+              </div>
+            </div>
+            
+            <div className="flex items-start space-x-3">
+              <div className="bg-green-500/20 p-2 rounded-lg">
+                <svg className="h-5 w-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-white font-medium">Encryption</h3>
+                <p className="text-gray-400 text-sm">All files are automatically encrypted for security</p>
+              </div>
+            </div>
+            
+            <div className="flex items-start space-x-3">
+              <div className="bg-purple-500/20 p-2 rounded-lg">
+                <svg className="h-5 w-5 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-white font-medium">Backup</h3>
+                <p className="text-gray-400 text-sm">Automatic backups ensure your files are safe</p>
+              </div>
+            </div>
+            
+            <div className="flex items-start space-x-3">
+              <div className="bg-yellow-500/20 p-2 rounded-lg">
+                <svg className="h-5 w-5 text-yellow-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
+              <div>
+                <h3 className="text-white font-medium">Speed</h3>
+                <p className="text-gray-400 text-sm">Upload speed depends on your internet connection</p>
+              </div>
+            </div>
+          </div>
         </div>
-      )}
+      </div>
     </div>
   );
 };

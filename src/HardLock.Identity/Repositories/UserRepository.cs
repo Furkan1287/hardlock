@@ -1,9 +1,8 @@
-using Dapper;
-using Microsoft.Extensions.Logging;
-using Npgsql;
-using System.Text.Json;
 using HardLock.Identity.Data;
-using HardLock.Shared.Models;
+using HardLock.Identity.Models;
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging;
+using Dapper;
 
 namespace HardLock.Identity.Repositories;
 
@@ -18,274 +17,143 @@ public class UserRepository : IUserRepository
         _logger = logger;
     }
 
-    public async Task<User?> GetByIdAsync(Guid id)
+    public async Task<UserResponse?> GetUserByEmailAsync(string email)
     {
         try
         {
             using var connection = await _connectionFactory.CreateConnectionAsync();
+            var query = "SELECT Id, FirstName, LastName, Email, IsActive, CreatedAt, LastLoginAt FROM Users WHERE Email = @Email";
             
-            const string sql = @"
-                SELECT id, email, password_hash, first_name, last_name, is_active, 
-                       requires_mfa, created_at, last_login_at, roles, metadata
-                FROM identity.users 
-                WHERE id = @Id";
-
-            var user = await connection.QueryFirstOrDefaultAsync<User>(sql, new { Id = id });
-            
-            if (user != null)
-            {
-                // Parse JSON fields
-                user.Roles = ParseJsonArray<string>(user.Roles?.ToString() ?? "[]");
-                user.Metadata = ParseJsonObject(user.Metadata?.ToString() ?? "{}");
-            }
-
-            return user;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error getting user by ID: {UserId}", id);
-            throw;
-        }
-    }
-
-    public async Task<User?> GetByEmailAsync(string email)
-    {
-        try
-        {
-            using var connection = await _connectionFactory.CreateConnectionAsync();
-            
-            const string sql = @"
-                SELECT id, email, password_hash, first_name, last_name, is_active, 
-                       requires_mfa, created_at, last_login_at, roles, metadata
-                FROM identity.users 
-                WHERE email = @Email";
-
-            var user = await connection.QueryFirstOrDefaultAsync<User>(sql, new { Email = email.ToLowerInvariant() });
-            
-            if (user != null)
-            {
-                // Parse JSON fields
-                user.Roles = ParseJsonArray<string>(user.Roles?.ToString() ?? "[]");
-                user.Metadata = ParseJsonObject(user.Metadata?.ToString() ?? "{}");
-            }
-
-            return user;
+            return await connection.QueryFirstOrDefaultAsync<UserResponse>(query, new { Email = email });
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error getting user by email: {Email}", email);
-            throw;
+            return null;
         }
     }
 
-    public async Task<IEnumerable<User>> GetAllAsync()
+    public async Task<UserResponse?> GetUserByIdAsync(Guid id)
     {
         try
         {
             using var connection = await _connectionFactory.CreateConnectionAsync();
+            var query = "SELECT Id, FirstName, LastName, Email, IsActive, CreatedAt, LastLoginAt FROM Users WHERE Id = @Id";
             
-            const string sql = @"
-                SELECT id, email, password_hash, first_name, last_name, is_active, 
-                       requires_mfa, created_at, last_login_at, roles, metadata
-                FROM identity.users 
-                ORDER BY created_at DESC";
-
-            var users = await connection.QueryAsync<User>(sql);
-            
-            foreach (var user in users)
-            {
-                user.Roles = ParseJsonArray<string>(user.Roles?.ToString() ?? "[]");
-                user.Metadata = ParseJsonObject(user.Metadata?.ToString() ?? "{}");
-            }
-
-            return users;
+            return await connection.QueryFirstOrDefaultAsync<UserResponse>(query, new { Id = id });
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error getting all users");
-            throw;
+            _logger.LogError(ex, "Error getting user by id: {Id}", id);
+            return null;
         }
     }
 
-    public async Task<User> CreateAsync(User user)
+    public async Task<UserResponse> CreateUserAsync(UserRegistrationRequest request, string hashedPassword)
     {
         try
         {
             using var connection = await _connectionFactory.CreateConnectionAsync();
+            var query = @"
+                INSERT INTO Users (Id, FirstName, LastName, Email, PasswordHash, IsActive, CreatedAt)
+                VALUES (@Id, @FirstName, @LastName, @Email, @PasswordHash, @IsActive, @CreatedAt)";
             
-            const string sql = @"
-                INSERT INTO identity.users (id, email, password_hash, first_name, last_name, 
-                                          is_active, requires_mfa, created_at, roles, metadata)
-                VALUES (@Id, @Email, @PasswordHash, @FirstName, @LastName, 
-                       @IsActive, @RequiresMfa, @CreatedAt, @Roles, @Metadata)
-                RETURNING id, email, password_hash, first_name, last_name, is_active, 
-                         requires_mfa, created_at, last_login_at, roles, metadata";
-
-            var parameters = new
+            var user = new UserResponse
             {
-                user.Id,
-                Email = user.Email.ToLowerInvariant(),
-                user.PasswordHash,
-                user.FirstName,
-                user.LastName,
-                user.IsActive,
-                user.RequiresMfa,
-                user.CreatedAt,
-                Roles = JsonSerializer.Serialize(user.Roles),
-                Metadata = JsonSerializer.Serialize(user.Metadata)
+                Id = Guid.NewGuid(),
+                FirstName = request.FirstName,
+                LastName = request.LastName,
+                Email = request.Email,
+                IsActive = true,
+                CreatedAt = DateTime.UtcNow
             };
-
-            var createdUser = await connection.QueryFirstAsync<User>(sql, parameters);
             
-            createdUser.Roles = user.Roles;
-            createdUser.Metadata = user.Metadata;
-
-            _logger.LogInformation("User created successfully: {UserId}", user.Id);
-            return createdUser;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error creating user: {Email}", user.Email);
-            throw;
-        }
-    }
-
-    public async Task<User> UpdateAsync(User user)
-    {
-        try
-        {
-            using var connection = await _connectionFactory.CreateConnectionAsync();
-            
-            const string sql = @"
-                UPDATE identity.users 
-                SET first_name = @FirstName, last_name = @LastName, is_active = @IsActive,
-                    requires_mfa = @RequiresMfa, last_modified_at = @LastModifiedAt,
-                    roles = @Roles, metadata = @Metadata
-                WHERE id = @Id
-                RETURNING id, email, password_hash, first_name, last_name, is_active, 
-                         requires_mfa, created_at, last_login_at, roles, metadata";
-
-            var parameters = new
+            await connection.ExecuteAsync(query, new
             {
                 user.Id,
                 user.FirstName,
                 user.LastName,
+                user.Email,
+                PasswordHash = hashedPassword,
                 user.IsActive,
-                user.RequiresMfa,
-                LastModifiedAt = DateTime.UtcNow,
-                Roles = JsonSerializer.Serialize(user.Roles),
-                Metadata = JsonSerializer.Serialize(user.Metadata)
-            };
-
-            var updatedUser = await connection.QueryFirstAsync<User>(sql, parameters);
+                user.CreatedAt
+            });
             
-            updatedUser.Roles = user.Roles;
-            updatedUser.Metadata = user.Metadata;
-
-            _logger.LogInformation("User updated successfully: {UserId}", user.Id);
-            return updatedUser;
+            return user;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error updating user: {UserId}", user.Id);
+            _logger.LogError(ex, "Error creating user: {Email}", request.Email);
             throw;
         }
     }
 
-    public async Task<bool> DeleteAsync(Guid id)
+    public async Task<bool> UpdateUserAsync(Guid id, UserUpdateRequest request)
     {
         try
         {
             using var connection = await _connectionFactory.CreateConnectionAsync();
+            var query = @"
+                UPDATE Users 
+                SET FirstName = COALESCE(@FirstName, FirstName),
+                    LastName = COALESCE(@LastName, LastName),
+                    Email = COALESCE(@Email, Email),
+                    IsActive = COALESCE(@IsActive, IsActive)
+                WHERE Id = @Id";
             
-            const string sql = "DELETE FROM identity.users WHERE id = @Id";
-            var rowsAffected = await connection.ExecuteAsync(sql, new { Id = id });
+            var rowsAffected = await connection.ExecuteAsync(query, new
+            {
+                Id = id,
+                request.FirstName,
+                request.LastName,
+                request.Email,
+                request.IsActive
+            });
             
-            _logger.LogInformation("User deleted: {UserId}, Rows affected: {RowsAffected}", id, rowsAffected);
             return rowsAffected > 0;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error deleting user: {UserId}", id);
-            throw;
-        }
-    }
-
-    public async Task<bool> ExistsAsync(string email)
-    {
-        try
-        {
-            using var connection = await _connectionFactory.CreateConnectionAsync();
-            
-            const string sql = "SELECT COUNT(1) FROM identity.users WHERE email = @Email";
-            var count = await connection.ExecuteScalarAsync<int>(sql, new { Email = email.ToLowerInvariant() });
-            
-            return count > 0;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error checking if user exists: {Email}", email);
-            throw;
-        }
-    }
-
-    public async Task<bool> ValidatePasswordAsync(string email, string passwordHash)
-    {
-        try
-        {
-            using var connection = await _connectionFactory.CreateConnectionAsync();
-            
-            const string sql = "SELECT password_hash FROM identity.users WHERE email = @Email";
-            var storedHash = await connection.ExecuteScalarAsync<string>(sql, new { Email = email.ToLowerInvariant() });
-            
-            return storedHash == passwordHash;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error validating password for user: {Email}", email);
+            _logger.LogError(ex, "Error updating user: {Id}", id);
             return false;
         }
     }
 
-    public async Task UpdateLastLoginAsync(Guid id)
+    public async Task<bool> UpdateLastLoginAsync(Guid id)
     {
         try
         {
             using var connection = await _connectionFactory.CreateConnectionAsync();
+            var query = "UPDATE Users SET LastLoginAt = @LastLoginAt WHERE Id = @Id";
             
-            const string sql = "UPDATE identity.users SET last_login_at = @LastLoginAt WHERE id = @Id";
-            await connection.ExecuteAsync(sql, new { Id = id, LastLoginAt = DateTime.UtcNow });
+            var rowsAffected = await connection.ExecuteAsync(query, new
+            {
+                Id = id,
+                LastLoginAt = DateTime.UtcNow
+            });
             
-            _logger.LogInformation("Last login updated for user: {UserId}", id);
+            return rowsAffected > 0;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error updating last login for user: {UserId}", id);
-            throw;
+            _logger.LogError(ex, "Error updating last login for user: {Id}", id);
+            return false;
         }
     }
 
-    private static List<T> ParseJsonArray<T>(string json)
+    public async Task<string?> GetPasswordHashAsync(string email)
     {
         try
         {
-            return JsonSerializer.Deserialize<List<T>>(json) ?? new List<T>();
+            using var connection = await _connectionFactory.CreateConnectionAsync();
+            var query = "SELECT PasswordHash FROM Users WHERE Email = @Email";
+            
+            return await connection.QueryFirstOrDefaultAsync<string>(query, new { Email = email });
         }
-        catch
+        catch (Exception ex)
         {
-            return new List<T>();
-        }
-    }
-
-    private static Dictionary<string, string> ParseJsonObject(string json)
-    {
-        try
-        {
-            return JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? new Dictionary<string, string>();
-        }
-        catch
-        {
-            return new Dictionary<string, string>();
+            _logger.LogError(ex, "Error getting password hash for user: {Email}", email);
+            return null;
         }
     }
 } 

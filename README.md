@@ -13,9 +13,9 @@ HARDLOCK, finansal sektör standartlarında güvenlik sağlayan, mikroservis tab
 2. **File Encryption Service** - Client-side AES-256-GCM encryption
 3. **File Storage Service** - S3/Blob storage with cold wallet backup
 4. **Access Control Service** - Multi-user access management
-5. **Cold Wallet Service** - Immutable backup with WORM compliance
-6. **Audit Service** - Comprehensive audit logging
-7. **Notification Service** - Real-time alerts and notifications
+5. **Audit Service** - Comprehensive audit logging
+6. **Notification Service** - Real-time alerts and notifications
+7. **API Gateway** - Reverse proxy and routing
 
 ### Advanced Security Features
 - 🔐 **Dual-Layer Encryption**: File-level + Storage-level encryption
@@ -36,7 +36,10 @@ git clone https://github.com/Furkan1287/hardlock.git
 cd hardlock
 
 # Tüm servisleri başlatın
-./start.sh
+docker-compose up -d
+
+# Frontend'e erişin
+open http://localhost:3000
 
 # API dokümantasyonuna erişin
 open http://localhost:8080/swagger
@@ -49,12 +52,36 @@ open http://localhost:8080/swagger
 - En az 4GB RAM
 - 10GB boş disk alanı
 
-## 📋 Gereksinimler
+## 🛠️ Geliştirme Ortamı
 
-### 🛠️ Geliştirme Ortamı
+### Kurulum Adımları
+
+1. **Repository'yi klonlayın:**
+   ```bash
+   git clone https://github.com/Furkan1287/hardlock.git
+   cd hardlock
+   ```
+
+2. **Docker Compose ile başlatın:**
+   ```bash
+   docker-compose up -d
+   ```
+
+3. **Servislerin durumunu kontrol edin:**
+   ```bash
+   docker-compose ps
+   ```
+
+4. **Logları kontrol edin:**
+   ```bash
+   docker-compose logs -f [service-name]
+   ```
+
+### 🔧 Geliştirme İçin Gereksinimler
 - .NET 8 SDK
 - Docker & Docker Compose
 - Git
+- Node.js 18+ (frontend geliştirme için)
 
 ### 🗄️ Veritabanı
 - **Geliştirme**: SQLite (otomatik kurulum)
@@ -75,8 +102,10 @@ Environment değişkenleri her servis için `.env` dosyalarında yapılandırıl
 DATABASE_CONNECTION_STRING=Data Source=hardlock.db
 
 # JWT
-JWT_SECRET=your-super-secret-key
-JWT_EXPIRY_MINUTES=15
+JWT__Secret=your-super-secret-key-here
+JWT__Issuer=hardlock
+JWT__Audience=hardlock-users
+JWT__ExpiryMinutes=15
 
 # Depolama (Production için)
 AWS_S3_BUCKET=hardlock-files
@@ -127,6 +156,10 @@ Proje başlatıldıktan sonra aşağıdaki URL'lere erişebilirsiniz:
 - **API Gateway**: http://localhost:8080
 - **Identity Service**: http://localhost:5001
 - **Encryption Service**: http://localhost:5002
+- **Storage Service**: http://localhost:5003
+- **Access Control Service**: http://localhost:5004
+- **Audit Service**: http://localhost:5005
+- **Notification Service**: http://localhost:5006
 - **Grafana**: http://localhost:3001 (admin/hardlock_admin)
 - **Prometheus**: http://localhost:9090
 
@@ -134,6 +167,42 @@ Proje başlatıldıktan sonra aşağıdaki URL'lere erişebilirsiniz:
 
 - **Email**: admin@hardlock.com
 - **Şifre**: Admin123!
+
+## 🐛 Sorun Giderme
+
+### Yaygın Sorunlar ve Çözümleri
+
+1. **Port Çakışması:**
+   ```bash
+   # Kullanılan portları kontrol edin
+   lsof -i :3000
+   lsof -i :8080
+   
+   # Servisleri durdurun ve yeniden başlatın
+   docker-compose down
+   docker-compose up -d
+   ```
+
+2. **JWT Secret Hatası:**
+   - `appsettings.json` dosyasının doğru konumda olduğundan emin olun
+   - Environment değişkenlerinin doğru ayarlandığını kontrol edin
+
+3. **Frontend Bağlantı Sorunu:**
+   ```bash
+   # Frontend container'ını yeniden başlatın
+   docker-compose restart frontend
+   
+   # Logları kontrol edin
+   docker-compose logs frontend
+   ```
+
+4. **Build Hataları:**
+   ```bash
+   # Cache'i temizleyin ve yeniden build edin
+   docker-compose down -v
+   docker-compose build --no-cache
+   docker-compose up -d
+   ```
 
 ## 📝 Lisans
 
@@ -156,13 +225,22 @@ Destek ve sorular için:
 
 ## 🔮 Gelecek Planları
 
+### ✅ Tamamlanan Servisler
+- [x] Identity Service implementasyonu
+- [x] Storage Service implementasyonu
+- [x] Access Control Service implementasyonu
+- [x] Audit Service implementasyonu
+- [x] Notification Service implementasyonu
+- [x] Encryption Service implementasyonu
+- [x] API Gateway implementasyonu
+- [x] Frontend React uygulaması
+- [x] Docker Compose konfigürasyonu
+- [x] Monitoring (Prometheus + Grafana)
+
 ### 🚧 Geliştirilme Aşamasında
-- [ ] Storage Service implementasyonu
-- [ ] Access Control Service implementasyonu
 - [ ] Cold Wallet Service implementasyonu
-- [ ] Audit Service implementasyonu
-- [ ] Notification Service implementasyonu
-- [ ] API Gateway implementasyonu
+- [ ] Frontend UI/UX iyileştirmeleri
+- [ ] API dokümantasyonu tamamlama
 
 ### 🎯 Planlanan Özellikler
 - [ ] FIDO2 biyometrik doğrulama
@@ -171,10 +249,15 @@ Destek ve sorular için:
 - [ ] BLE yakınlık doğrulaması
 - [ ] Cross-region replication
 - [ ] WORM compliance
+- [ ] Darknet backup implementasyonu
+- [ ] Geographic locking
+- [ ] Self-destruct mechanism
 
 ### 📈 Production Hazırlığı
 - [ ] PostgreSQL migration
 - [ ] Performance optimization
 - [ ] Security audit
 - [ ] Load testing
-- [ ] Documentation completion 
+- [ ] Documentation completion
+- [ ] CI/CD pipeline
+- [ ] Kubernetes deployment 
