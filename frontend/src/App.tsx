@@ -30,53 +30,51 @@ function App() {
     <QueryClientProvider client={queryClient}>
       <ThemeProvider>
         <AuthProvider>
-          <Router>
-            <div className="App">
-              <Routes>
-                {/* Public Routes */}
-                <Route path="/login" element={<Login />} />
-                <Route path="/register" element={<Register />} />
-                
-                {/* Protected Routes */}
-                <Route path="/" element={
-                  <ProtectedRoute>
-                    <Layout />
-                  </ProtectedRoute>
-                }>
-                  <Route index element={<Dashboard />} />
-                  <Route path="files" element={<FileManager />} />
-                  <Route path="upload" element={<FileUpload />} />
-                  <Route path="hash" element={<FileHash />} />
-                  <Route path="security" element={<SecurityCenter />} />
-                  <Route path="settings" element={<Settings />} />
-                </Route>
-              </Routes>
+          <div className="App">
+            <Routes>
+              {/* Public Routes */}
+              <Route path="/login" element={<Login />} />
+              <Route path="/register" element={<Register />} />
               
-              <Toaster
-                position="top-right"
-                toastOptions={{
-                  duration: 4000,
-                  style: {
-                    background: '#1e293b',
-                    color: '#f8fafc',
-                    border: '1px solid #334155',
+              {/* Protected Routes */}
+              <Route path="/" element={
+                <ProtectedRoute>
+                  <Layout />
+                </ProtectedRoute>
+              }>
+                <Route index element={<Dashboard />} />
+                <Route path="files" element={<FileManager />} />
+                <Route path="upload" element={<FileUpload />} />
+                <Route path="hash" element={<FileHash />} />
+                <Route path="security" element={<SecurityCenter />} />
+                <Route path="settings" element={<Settings />} />
+              </Route>
+            </Routes>
+            
+            <Toaster
+              position="top-right"
+              toastOptions={{
+                duration: 4000,
+                style: {
+                  background: '#1e293b',
+                  color: '#f8fafc',
+                  border: '1px solid #334155',
+                },
+                success: {
+                  iconTheme: {
+                    primary: '#22c55e',
+                    secondary: '#f8fafc',
                   },
-                  success: {
-                    iconTheme: {
-                      primary: '#22c55e',
-                      secondary: '#f8fafc',
-                    },
+                },
+                error: {
+                  iconTheme: {
+                    primary: '#ef4444',
+                    secondary: '#f8fafc',
                   },
-                  error: {
-                    iconTheme: {
-                      primary: '#ef4444',
-                      secondary: '#f8fafc',
-                    },
-                  },
-                }}
-              />
-            </div>
-          </Router>
+                },
+              }}
+            />
+          </div>
         </AuthProvider>
       </ThemeProvider>
     </QueryClientProvider>

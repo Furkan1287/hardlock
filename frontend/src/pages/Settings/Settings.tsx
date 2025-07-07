@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext.tsx';
 import { User, Mail, Lock, Key, LogOut } from 'lucide-react';
-import { AuthContext } from '../../contexts/AuthContext.tsx';
 
 interface UserSettings {
   email: string;

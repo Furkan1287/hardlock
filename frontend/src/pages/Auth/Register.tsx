@@ -1,6 +1,6 @@
-import React, { useState, useContext } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { AuthContext } from '../../../contexts/AuthContext.tsx';
+import { useAuth } from '../../contexts/AuthContext.tsx';
 
 const Register: React.FC = () => {
   const [formData, setFormData] = useState({
@@ -35,7 +35,13 @@ const Register: React.FC = () => {
     }
 
     try {
-      await register(formData.email, formData.password, formData.firstName, formData.lastName);
+      await register({
+        email: formData.email,
+        password: formData.password,
+        firstName: formData.firstName,
+        lastName: formData.lastName,
+        requiresMfa: false
+      });
       navigate('/dashboard');
     } catch (err) {
       setError('Registration failed. Please try again.');

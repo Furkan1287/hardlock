@@ -9,6 +9,9 @@ COPY package*.json ./
 # Install dependencies
 RUN npm ci --only=production
 
+# Set environment variable for build
+ENV REACT_APP_API_URL=http://localhost:8081
+
 # Copy source code
 COPY . .
 

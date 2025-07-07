@@ -12,7 +12,6 @@ import {
   Activity
 } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext.tsx';
-import { AuthContext } from '../../contexts/AuthContext.tsx';
 import { ThemeContext } from '../../contexts/ThemeContext.tsx';
 
 const Sidebar: React.FC = () => {

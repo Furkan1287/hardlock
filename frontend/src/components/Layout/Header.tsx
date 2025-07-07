@@ -2,7 +2,6 @@ import React, { useContext } from 'react';
 import { Bell, Search, Moon, Sun, LogOut } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext.tsx';
 import { useTheme } from '../../contexts/ThemeContext.tsx';
-import { AuthContext } from '../../contexts/AuthContext.tsx';
 
 const Header: React.FC = () => {
   const { logout } = useAuth();

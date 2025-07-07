@@ -10,7 +10,6 @@ import {
   Clock,
   Activity
 } from 'lucide-react';
-import { AuthContext } from '../../contexts/AuthContext.tsx';
 
 interface DashboardStats {
   totalFiles: number;
@@ -88,13 +87,13 @@ const Dashboard: React.FC = () => {
           {
             id: '1',
             type: 'warning',
-            message: '3 files require encryption for compliance',
+            message: '3 dosya şifreleme için gerekli',
             timestamp: '2024-01-15T11:00:00Z'
           },
           {
             id: '2',
             type: 'info',
-            message: 'Backup completed successfully',
+            message: 'Yedekleme başarıyla tamamlandı',
             timestamp: '2024-01-15T10:30:00Z'
           }
         ]);

@@ -1,6 +1,6 @@
-import React, { useState, useContext } from 'react';
+import React, { useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { AuthContext } from '../../../contexts/AuthContext.tsx';
+import { useAuth } from '../../contexts/AuthContext.tsx';
 
 const Login: React.FC = () => {
   const [formData, setFormData] = useState({
